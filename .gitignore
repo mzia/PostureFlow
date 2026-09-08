@@ -1,0 +1,14 @@
+# System & editor artifacts
+.DS_Store
+*~
+*.swp
+*.swo
+
+# IDE settings
+.vscode/
+.idea/
+
+# Logs & temp files
+*.log
+scratch/
+tmp/
