@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# pop-profile Installer
+# pop-profile Installer (CLI + Rust D-Bus Daemon + Polkit)
 # ==============================================================================
 
 set -eo pipefail
@@ -18,13 +18,46 @@ fi
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-echo -e "\n${BOLD}${CYAN}=== Installing pop-profile ===${NC}"
+echo -e "\n${BOLD}${CYAN}=== Installing pop-profile & Rust D-Bus Daemon ===${NC}"
 
-# 1. Install binary
-echo "[*] Installing binary to /usr/local/bin/pop-profile..."
+# 1. Install CLI binary
+echo "[*] Installing CLI to /usr/local/bin/pop-profile..."
 install -m 755 "$SCRIPT_DIR/bin/pop-profile" /usr/local/bin/pop-profile
 
-# 2. Install man page
+# 2. Install Rust Daemon binary if built
+if [ -f "$SCRIPT_DIR/target/release/pop-profile-daemon" ]; then
+    echo "[*] Installing Rust daemon to /usr/local/bin/pop-profile-daemon..."
+    install -m 755 "$SCRIPT_DIR/target/release/pop-profile-daemon" /usr/local/bin/pop-profile-daemon
+fi
+
+# 3. Install Polkit Policy (Passwordless desktop profile switching)
+if [ -f "$SCRIPT_DIR/data/io.github.mzia.PopProfile.policy" ]; then
+    echo "[*] Installing Polkit policy to /usr/share/polkit-1/actions/..."
+    install -d /usr/share/polkit-1/actions
+    install -m 644 "$SCRIPT_DIR/data/io.github.mzia.PopProfile.policy" /usr/share/polkit-1/actions/io.github.mzia.PopProfile.policy
+fi
+
+# 4. Install D-Bus System Bus Configuration
+if [ -f "$SCRIPT_DIR/data/io.github.mzia.PopProfile.conf" ]; then
+    echo "[*] Installing D-Bus system configuration..."
+    install -d /usr/share/dbus-1/system.d
+    install -m 644 "$SCRIPT_DIR/data/io.github.mzia.PopProfile.conf" /usr/share/dbus-1/system.d/io.github.mzia.PopProfile.conf
+    # Reload D-Bus configuration
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl reload dbus 2>/dev/null || true
+    fi
+fi
+
+# 5. Install Systemd Service Unit
+if [ -f "$SCRIPT_DIR/data/pop-profile-daemon.service" ]; then
+    echo "[*] Installing systemd daemon service..."
+    install -m 644 "$SCRIPT_DIR/data/pop-profile-daemon.service" /etc/systemd/system/pop-profile-daemon.service
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl daemon-reload 2>/dev/null || true
+    fi
+fi
+
+# 6. Install Man page
 echo "[*] Installing manual page to /usr/local/share/man/man1/pop-profile.1..."
 install -d /usr/local/share/man/man1
 install -m 644 "$SCRIPT_DIR/man/pop-profile.1" /usr/local/share/man/man1/pop-profile.1
@@ -32,7 +65,7 @@ if command -v mandb >/dev/null 2>&1; then
     mandb -q >/dev/null 2>&1 || true
 fi
 
-# 3. Install completions
+# 7. Install Completions
 if [ -d /etc/bash_completion.d ]; then
     echo "[*] Installing bash completion..."
     install -m 644 "$SCRIPT_DIR/completions/pop-profile.bash" /etc/bash_completion.d/pop-profile
@@ -42,7 +75,7 @@ if [ -d /usr/share/zsh/vendor-completions ]; then
     install -m 644 "$SCRIPT_DIR/completions/pop-profile.zsh" /usr/share/zsh/vendor-completions/_pop-profile
 fi
 
-# 4. Install APT post-upgrade hook for persistence
+# 8. Install APT post-upgrade hook for persistence
 echo "[*] Registering APT post-upgrade maintenance hook..."
 mkdir -p /etc/apt/apt.conf.d/
 cat << 'EOF' > /etc/apt/apt.conf.d/99-popos-profile-health
@@ -51,16 +84,19 @@ DPkg::Post-Invoke { "if [ -x /usr/local/bin/pop-profile ]; then /usr/local/bin/p
 EOF
 chmod 644 /etc/apt/apt.conf.d/99-popos-profile-health
 
-# 5. Run safety verification
+# 9. Run safety verification
 echo "[*] Running verification tests..."
 bash "$SCRIPT_DIR/tests/test_safety.sh"
 
 echo ""
-echo -e "${GREEN}${BOLD}[✔] pop-profile installed successfully!${NC}"
+echo -e "${GREEN}${BOLD}[✔] pop-profile & Rust D-Bus components installed successfully!${NC}"
 echo "Usage:"
 echo "  sudo pop-profile --home      # Streaming & Gaming"
 echo "  sudo pop-profile --work      # Office & Corporate VPN"
 echo "  sudo pop-profile --dev       # Coding & Debugging"
 echo "  sudo pop-profile --secure    # Travel & Lockdown"
 echo "  pop-profile --status         # Check active posture"
-echo "  man pop-profile              # Read manual page"
+echo ""
+echo "D-Bus Daemon Service:"
+echo "  sudo systemctl start pop-profile-daemon    # Start background D-Bus service"
+echo "  sudo systemctl enable pop-profile-daemon   # Enable on boot for COSMIC Applets"

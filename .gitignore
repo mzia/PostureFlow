@@ -8,6 +8,9 @@
 .vscode/
 .idea/
 
+# Build artifacts
+target/
+
 # Logs & temp files
 *.log
 scratch/

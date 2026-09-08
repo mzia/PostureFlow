@@ -95,6 +95,54 @@ man pop-profile
 
 ---
 
+## 🦀 Rust D-Bus Daemon & Polkit (Phase 1)
+
+`pop-profile` includes a native Rust system daemon (`pop-profile-daemon`) built with [`zbus`](https://crates.io/crates/zbus) providing an asynchronous D-Bus service on `io.github.mzia.PopProfile`.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  COSMIC Panel Applet / Flatpak GUI (libcosmic)              │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ D-Bus Method Call (SetProfile)
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Polkit Policy (io.github.mzia.PopProfile)                  │
+│  • Passwordless switching for active desktop sessions       │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│  pop-profile-daemon (Rust + zbus)                           │
+│  • Emits ProfileChanged signals to update panel applets     │
+│  • Manages sysctl, UFW, limits, and idle timeouts           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Building & Running the Daemon
+
+```bash
+# Build the optimized release binary
+cargo build --release
+
+# Run unit and integration tests
+cargo test
+bash tests/test_dbus.sh
+
+# Start the system daemon
+sudo systemctl enable --now pop-profile-daemon
+```
+
+### D-Bus API (`io.github.mzia.PopProfile`)
+
+* `GetActiveProfile() -> (String)`: Returns current active profile name.
+* `SetProfile(profile: String) -> ()`: Applies profile and broadcasts `ProfileChanged(String)` signal.
+* `GetStatus() -> (String)`: Returns live kernel and firewall status report.
+* `ResetToDefaults() -> ()`: Restores system to factory Pop!_OS defaults.
+
+---
+
 ## 🗑️ Uninstallation
 
 To cleanly remove `pop-profile` and restore Pop!_OS to factory defaults:

@@ -1,0 +1,19 @@
+[package]
+name = "pop-profile"
+version = "1.0.0"
+edition = "2021"
+authors = ["M. Zia"]
+description = "Context-aware security, developer, and lifestyle profile manager for Pop!_OS"
+license = "MIT"
+repository = "https://github.com/mzia/pop-profile-manager"
+
+[[bin]]
+name = "pop-profile-daemon"
+path = "src/main.rs"
+
+[dependencies]
+zbus = { version = "4", default-features = false, features = ["tokio"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

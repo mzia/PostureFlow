@@ -1,4 +1,4 @@
-name: CI Safety Tests
+name: CI Safety & D-Bus Tests
 
 on:
   push:
@@ -14,10 +14,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ufw man-db
+          sudo apt-get install -y -qq ufw man-db dbus libdbus-1-dev libglib2.0-bin
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Verify Shellcheck syntax
         run: |
@@ -25,10 +28,23 @@ jobs:
           bash -n install.sh
           bash -n uninstall.sh
           bash -n tests/test_safety.sh
+          bash -n tests/test_dbus.sh
 
       - name: Run Anti-Lockout Test Suite
         run: |
           bash tests/test_safety.sh
+
+      - name: Run Rust Unit Tests
+        run: |
+          cargo test
+
+      - name: Build Rust Release Binary
+        run: |
+          cargo build --release
+
+      - name: Run D-Bus Integration Tests
+        run: |
+          bash tests/test_dbus.sh
 
       - name: Verify Man Page
         run: |
