@@ -1,0 +1,109 @@
+# pop-profile-manager
+
+[![CI Safety Tests](https://github.com/mzia/pop-profile-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/mzia/pop-profile-manager/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![OS: Pop!_OS](https://img.shields.io/badge/OS-Pop!__OS%20%7C%20Ubuntu-orange.svg)](https://system76.com/pop)
+[![Hardware: Framework Laptop](https://img.shields.io/badge/Hardware-Framework%20Laptop-black.svg)](https://frame.work)
+
+> **Context-aware security, developer, and lifestyle profile manager for Pop!_OS and Ubuntu laptops.**
+
+`pop-profile` dynamically bridges the gap between paranoid security, frictionless software engineering, and casual entertainment. Switch postures with a single command without ever being locked out of your laptop.
+
+---
+
+## ⚡ Quick Start
+
+```bash
+git clone https://github.com/mzia/pop-profile-manager.git
+cd pop-profile-manager
+sudo ./install.sh
+```
+
+Now switch postures anytime:
+```bash
+sudo pop-profile --home      # Streaming, Proton gaming, phone sync (GSConnect)
+sudo pop-profile --work      # Office & corporate VPN (dev ports blocked to LAN)
+sudo pop-profile --dev       # Coding & debugging (ptrace allowed, 524k file watchers)
+sudo pop-profile --secure    # Coffee shops, airports & public Wi-Fi (stealth mode)
+pop-profile --status         # Inspect live posture without sudo
+```
+
+---
+
+## 🎯 Why pop-profile?
+
+Linux security tools (like UFW, firewalld, or raw sysctl) are static. But laptop users live in dynamic contexts:
+
+* **The Dev Friction Problem:** Strict security (`ptrace_scope = 2`) blocks `gdb`, `lldb`, and VS Code from debugging processes. Default `inotify` limits crash Vite and Webpack. Devs end up turning off security entirely.
+* **The Corporate Leak Risk:** Running a local dev server (`0.0.0.0:3000`) or test database on a corporate office Wi-Fi exposes your code and data to everyone on the subnet.
+* **The Home Entertainment Barrier:** Overly aggressive firewalls break Steam Remote Play, local game downloads, and phone sync (GSConnect/LocalSend).
+* **The Update Drift Problem:** Every `apt upgrade` or kernel bump wipes runtime sysctl tuning and resets UFW configurations.
+
+`pop-profile` solves all of this with zero dependencies and built-in anti-lockout guarantees.
+
+---
+
+## 📊 The Four Profiles
+
+| Feature / Setting | 🏠 Home | 💼 Work | 💻 Dev | 🛡️ Secure |
+| :--- | :--- | :--- | :--- | :--- |
+| **Context** | Couch / Streaming / Gaming | Office / Corporate VPN | Coding / Testing / Lab | Coffee shop / Airport |
+| **Inbound Firewall** | LAN trusted, WAN blocked | WAN blocked, VPN allowed | Dev ports open | **100% Blocked (Stealth)** |
+| **Dev Ports (3000, 8000...)** | ❌ Blocked | ❌ **Strictly blocked to LAN** | ✅ **Allowed** | ❌ Blocked |
+| **Corporate VPNs** | Allowed | ✅ **Unblocked (`tun+`, `wg+`)** | Allowed | Outbound only |
+| **Steam Remote Play** | ✅ **Allowed (`27031-27040`)**| ❌ Blocked | ❌ Blocked | ❌ Blocked |
+| **Phone Sync (GSConnect)** | ✅ **Allowed (`1714-1764`)** | ❌ Blocked | ❌ Blocked | ❌ Blocked |
+| **LocalSend Sharing** | ✅ **Allowed (`53317`)** | ❌ Blocked | ❌ Blocked | ❌ Blocked |
+| **Proton Gaming (`vm.max_map`)**| **`1,048,576` (No crashes)**| Default | Default | Default |
+| **Debugger Hooking (`ptrace`)**| `1` (Overlays hook) | `1` (Standard) | `1` (Full debugger attach) | `2` **(Anti-memory scraping)** |
+| **File Watchers (`inotify`)** | 524,288 | 524,288 | **524,288 (Hot-reload ready)**| Default |
+| **Crash Dumps** | Enabled | Disabled | **Enabled for `gdb`** | **Disabled (No key leaks)** |
+| **Screen Lock Timeout** | **30 minutes** | **5 minutes (Compliance)** | **15 minutes** | **5 minutes** |
+
+---
+
+## 🔒 Anti-Lockout Invariants
+
+`pop-profile` is built around safety invariants ensuring you can **never lock yourself out**:
+
+1. **SSH Auto-Preservation:** If an active SSH session or daemon is detected, port `22/tcp` is automatically whitelisted before the firewall is touched.
+2. **Loopback IPC Guarantee:** Explicit `allow on lo` rules guarantee desktop environments (Wayland, X11, COSMIC, GNOME), PipeWire audio, and D-Bus never freeze.
+3. **Outbound Internet Egress:** Default-allow outgoing stateful tracking ensures browsing, DNS, and package updates never break.
+4. **PAM & Sudo Untouched:** User authentication and login files are never modified.
+
+Run the test suite anytime:
+```bash
+pop-profile --test
+```
+
+---
+
+## 🔄 Self-Healing Post-Upgrade Hook
+
+`pop-profile` includes an APT post-invoke hook registered at `/etc/apt/apt.conf.d/99-popos-profile-health`. 
+
+Whenever an `apt upgrade`, kernel update, or patch finishes installing, the hook automatically validates and re-applies your profile settings in the background.
+
+---
+
+## 📖 Manual Page
+
+A complete Linux manual page is included:
+```bash
+man pop-profile
+```
+
+---
+
+## 🗑️ Uninstallation
+
+To cleanly remove `pop-profile` and restore Pop!_OS to factory defaults:
+```bash
+sudo ./uninstall.sh
+```
+
+---
+
+## 📄 License
+
+MIT © M. Zia

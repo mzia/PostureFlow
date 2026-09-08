@@ -1,0 +1,35 @@
+name: CI Safety Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ufw man-db
+
+      - name: Verify Shellcheck syntax
+        run: |
+          bash -n bin/pop-profile
+          bash -n install.sh
+          bash -n uninstall.sh
+          bash -n tests/test_safety.sh
+
+      - name: Run Anti-Lockout Test Suite
+        run: |
+          bash tests/test_safety.sh
+
+      - name: Verify Man Page
+        run: |
+          man -l man/pop-profile.1 > /dev/null
