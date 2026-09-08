@@ -14,14 +14,24 @@
 
 ## ⚡ Quick Start
 
+### Option 1: Install via Pre-Built Debian Package (Recommended)
+
+Download the latest `.deb` from [GitHub Releases](https://github.com/mzia/pop-profile-manager/releases) and install:
+```bash
+sudo dpkg -i pop-profile_1.0.0_amd64.deb
+```
+
+### Option 2: Install from Source
+
 ```bash
 git clone https://github.com/mzia/pop-profile-manager.git
 cd pop-profile-manager
 
-# Optional: Build the Rust D-Bus daemon (if Rust is installed)
-cargo build --release
+# Build Rust daemon and Debian package
+make deb
+sudo dpkg -i dist/pop-profile_1.0.0_amd64.deb
 
-# Install CLI, daemon, completions, Polkit policy, and man page
+# Or install directly with the installer script
 sudo ./install.sh
 ```
 
@@ -176,15 +186,18 @@ pop-profile-manager/
 ├── completions/
 │   ├── pop-profile.bash             # Bash auto-completion
 │   └── pop-profile.zsh              # Zsh auto-completion
+├── scripts/
+│   └── build_deb.sh                 # Automated Debian .deb package builder
 ├── tests/
 │   ├── test_safety.sh               # 8-point automated anti-lockout test suite
 │   └── test_dbus.sh                 # D-Bus integration test suite
 ├── .github/
 │   └── workflows/
-│       └── ci.yml                   # CI testing workflow (Rust + Safety + D-Bus)
+│       ├── ci.yml                   # CI testing workflow (Rust + Safety + D-Bus)
+│       └── release.yml              # Automated .deb build & GitHub Releases
 ├── install.sh                       # One-command system installer
 ├── uninstall.sh                     # Clean uninstaller (restores Pop!_OS defaults)
-├── Makefile                         # 'make install', 'make test', 'make uninstall'
+├── Makefile                         # 'make install', 'make deb', 'make test', 'make uninstall'
 ├── LICENSE                          # MIT License (© M. Zia)
 └── README.md                        # Project documentation
 ```
@@ -199,9 +212,10 @@ pop-profile-manager/
   - [x] Rust daemon with `zbus` on `io.github.mzia.PopProfile`
   - [x] Polkit policy for passwordless desktop switching
   - [x] APT post-upgrade self-healing hook
-- [ ] **Phase 2: Packaging & Distribution**
-  - [ ] Debian `.deb` package generation
-  - [ ] System76 Launchpad / PPA packaging
+- [x] **Phase 2: Packaging & Distribution**
+  - [x] Debian `.deb` package generation (`scripts/build_deb.sh` / `make deb`)
+  - [x] Standard systemd, Polkit, D-Bus, completions, and man page packaging
+  - [x] Automated GitHub Actions release workflow (`.github/workflows/release.yml`)
 - [ ] **Phase 3: Native COSMIC Panel Applet**
   - [ ] Rust `libcosmic` panel applet with live status icon
   - [ ] Dropdown popover menu with one-click profile toggling

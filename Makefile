@@ -19,3 +19,8 @@ uninstall:
 
 test:
 	@bash ./tests/test_safety.sh
+	@bash ./tests/test_dbus.sh
+
+deb:
+	@./scripts/build_deb.sh
+
