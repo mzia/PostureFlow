@@ -1,7 +1,8 @@
 # pop-profile-manager
 
-[![CI Safety Tests](https://github.com/mzia/pop-profile-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/mzia/pop-profile-manager/actions/workflows/ci.yml)
+[![CI Safety & D-Bus Tests](https://github.com/mzia/pop-profile-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/mzia/pop-profile-manager/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Rust: 1.80+](https://img.shields.io/badge/Rust-1.80%2B-red.svg)](https://www.rust-lang.org)
 [![OS: Pop!_OS](https://img.shields.io/badge/OS-Pop!__OS%20%7C%20Ubuntu-orange.svg)](https://system76.com/pop)
 [![Hardware: Framework Laptop](https://img.shields.io/badge/Hardware-Framework%20Laptop-black.svg)](https://frame.work)
 
@@ -16,6 +17,11 @@
 ```bash
 git clone https://github.com/mzia/pop-profile-manager.git
 cd pop-profile-manager
+
+# Optional: Build the Rust D-Bus daemon (if Rust is installed)
+cargo build --release
+
+# Install CLI, daemon, completions, Polkit policy, and man page
 sudo ./install.sh
 ```
 
@@ -39,7 +45,7 @@ Linux security tools (like UFW, firewalld, or raw sysctl) are static. But laptop
 * **The Home Entertainment Barrier:** Overly aggressive firewalls break Steam Remote Play, local game downloads, and phone sync (GSConnect/LocalSend).
 * **The Update Drift Problem:** Every `apt upgrade` or kernel bump wipes runtime sysctl tuning and resets UFW configurations.
 
-`pop-profile` solves all of this with zero dependencies and built-in anti-lockout guarantees.
+`pop-profile` solves all of this with zero dependencies, Rust D-Bus integration, and built-in anti-lockout guarantees.
 
 ---
 
@@ -78,43 +84,29 @@ pop-profile --test
 
 ---
 
-## 🔄 Self-Healing Post-Upgrade Hook
-
-`pop-profile` includes an APT post-invoke hook registered at `/etc/apt/apt.conf.d/99-popos-profile-health`. 
-
-Whenever an `apt upgrade`, kernel update, or patch finishes installing, the hook automatically validates and re-applies your profile settings in the background.
-
----
-
-## 📖 Manual Page
-
-A complete Linux manual page is included:
-```bash
-man pop-profile
-```
-
----
-
 ## 🦀 Rust D-Bus Daemon & Polkit (Phase 1)
 
 `pop-profile` includes a native Rust system daemon (`pop-profile-daemon`) built with [`zbus`](https://crates.io/crates/zbus) providing an asynchronous D-Bus service on `io.github.mzia.PopProfile`.
 
-### Architecture
+### Two-Tier Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  COSMIC Panel Applet / Flatpak GUI (libcosmic)              │
+│  FRONTEND: COSMIC Panel Applet / Flatpak GUI (libcosmic)    │
+│  • Lives in the panel (symbolic profile icon)               │
+│  • Popover UI: Radio buttons for Home, Work, Dev, Secure    │
 └──────────────────────────────┬──────────────────────────────┘
                                │ D-Bus Method Call (SetProfile)
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Polkit Policy (io.github.mzia.PopProfile)                  │
+│  SECURITY: Polkit Policy (io.github.mzia.PopProfile)        │
 │  • Passwordless switching for active desktop sessions       │
+│  • Located at /usr/share/polkit-1/actions/                  │
 └──────────────────────────────┬──────────────────────────────┘
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  pop-profile-daemon (Rust + zbus)                           │
+│  BACKEND: pop-profile-daemon (Rust + zbus)                  │
 │  • Emits ProfileChanged signals to update panel applets     │
 │  • Manages sysctl, UFW, limits, and idle timeouts           │
 └─────────────────────────────────────────────────────────────┘
@@ -126,20 +118,95 @@ man pop-profile
 # Build the optimized release binary
 cargo build --release
 
-# Run unit and integration tests
+# Run unit and D-Bus integration tests
 cargo test
 bash tests/test_dbus.sh
 
-# Start the system daemon
+# Enable and start the background system daemon
 sudo systemctl enable --now pop-profile-daemon
 ```
 
-### D-Bus API (`io.github.mzia.PopProfile`)
+### D-Bus API Specification (`io.github.mzia.PopProfile`)
 
-* `GetActiveProfile() -> (String)`: Returns current active profile name.
-* `SetProfile(profile: String) -> ()`: Applies profile and broadcasts `ProfileChanged(String)` signal.
-* `GetStatus() -> (String)`: Returns live kernel and firewall status report.
-* `ResetToDefaults() -> ()`: Restores system to factory Pop!_OS defaults.
+| Member | Type | Signature | Description |
+| :--- | :--- | :--- | :--- |
+| `GetActiveProfile` | Method | `() -> (s)` | Returns active profile name (`home`, `work`, `dev`, `secure`). |
+| `SetProfile` | Method | `(s) -> ()` | Applies system posture and broadcasts `ProfileChanged`. |
+| `GetStatus` | Method | `() -> (s)` | Returns live kernel and firewall status report. |
+| `ResetToDefaults`| Method | `() -> ()` | Restores system to factory Pop!_OS defaults. |
+| `ProfileChanged` | Signal | `(s)` | Broadcasts when a profile change occurs. |
+
+---
+
+## 🔄 Self-Healing Post-Upgrade Hook
+
+`pop-profile` includes an APT post-invoke hook registered at `/etc/apt/apt.conf.d/99-popos-profile-health`. 
+
+Whenever an `apt upgrade`, kernel update, or patch finishes installing, the hook automatically validates and re-applies your profile settings in the background.
+
+---
+
+## 📖 Manual Page & Completions
+
+* **Manual Page:**
+  ```bash
+  man pop-profile
+  ```
+* **Shell Completions:** Automatically installed for **Bash** (`/etc/bash_completion.d/pop-profile`) and **Zsh** (`/usr/share/zsh/vendor-completions/_pop-profile`).
+
+---
+
+## 📂 Repository Structure
+
+```text
+pop-profile-manager/
+├── bin/
+│   └── pop-profile                  # Standalone CLI executable
+├── src/
+│   ├── main.rs                      # Rust CLI & D-Bus daemon entrypoint
+│   ├── dbus.rs                      # zbus asynchronous D-Bus service & signals
+│   ├── profile.rs                   # Profile enum & icon mappings
+│   └── system.rs                    # System controller (sysctl, ufw, limits)
+├── data/
+│   ├── io.github.mzia.PopProfile.policy # Polkit passwordless authorization
+│   ├── io.github.mzia.PopProfile.conf   # D-Bus system bus permissions
+│   └── pop-profile-daemon.service   # Systemd service unit
+├── man/
+│   └── pop-profile.1                # Native Linux manual page
+├── completions/
+│   ├── pop-profile.bash             # Bash auto-completion
+│   └── pop-profile.zsh              # Zsh auto-completion
+├── tests/
+│   ├── test_safety.sh               # 8-point automated anti-lockout test suite
+│   └── test_dbus.sh                 # D-Bus integration test suite
+├── .github/
+│   └── workflows/
+│       └── ci.yml                   # CI testing workflow (Rust + Safety + D-Bus)
+├── install.sh                       # One-command system installer
+├── uninstall.sh                     # Clean uninstaller (restores Pop!_OS defaults)
+├── Makefile                         # 'make install', 'make test', 'make uninstall'
+├── LICENSE                          # MIT License (© M. Zia)
+└── README.md                        # Project documentation
+```
+
+---
+
+## 🗺️ Project Roadmap
+
+- [x] **Phase 1: CLI & Rust D-Bus Daemon**
+  - [x] 4 lifestyle/context profiles (Home, Work, Dev, Secure)
+  - [x] Anti-lockout invariant test suite
+  - [x] Rust daemon with `zbus` on `io.github.mzia.PopProfile`
+  - [x] Polkit policy for passwordless desktop switching
+  - [x] APT post-upgrade self-healing hook
+- [ ] **Phase 2: Packaging & Distribution**
+  - [ ] Debian `.deb` package generation
+  - [ ] System76 Launchpad / PPA packaging
+- [ ] **Phase 3: Native COSMIC Panel Applet**
+  - [ ] Rust `libcosmic` panel applet with live status icon
+  - [ ] Dropdown popover menu with one-click profile toggling
+- [ ] **Phase 4: Flatpak Distribution**
+  - [ ] Flatpak manifest with host D-Bus portal access
 
 ---
 
