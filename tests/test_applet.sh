@@ -29,6 +29,9 @@ set -eo pipefail
 DAEMON="./target/release/pop-profile-daemon"
 APPLET="./target/release/pop-profile-applet"
 
+TEST_STATE=$(mktemp)
+export POP_PROFILE_STATE_FILE="$TEST_STATE"
+
 echo "[*] Step 1: Starting pop-profile-daemon on test bus..."
 $DAEMON --daemon --session-bus &
 DAEMON_PID=$!
@@ -43,6 +46,7 @@ cleanup() {
     echo "[*] Cleaning up background test processes..."
     kill $APPLET_PID 2>/dev/null || true
     kill $DAEMON_PID 2>/dev/null || true
+    rm -f "$TEST_STATE"
 }
 trap cleanup EXIT
 
@@ -76,9 +80,17 @@ sleep 1
 
 ACTIVE_PROFILE=$(gdbus call --session --dest io.github.mzia.PopProfile --object-path /io/github/mzia/PopProfile --method io.github.mzia.PopProfile.GetActiveProfile)
 echo "    -> Active Profile from Daemon: $ACTIVE_PROFILE"
+if [[ "$ACTIVE_PROFILE" != *"work"* ]]; then
+    echo "[-] Error: Expected active profile 'work', got: $ACTIVE_PROFILE"
+    exit 1
+fi
 
 UPDATED_ICON=$(gdbus call --session --dest "$APPLET_DEST" --object-path /StatusNotifierItem --method org.freedesktop.DBus.Properties.Get org.kde.StatusNotifierItem IconName)
 echo "    -> Updated Icon: $UPDATED_ICON"
+if [[ "$UPDATED_ICON" != *"applications-office-symbolic"* ]]; then
+    echo "[-] Error: Expected work icon, got: $UPDATED_ICON"
+    exit 1
+fi
 
 echo "[*] Step 6: Simulating left click (Activate) to cycle to Dev profile..."
 gdbus call --session --dest "$APPLET_DEST" --object-path /StatusNotifierItem --method org.kde.StatusNotifierItem.Activate 0 0
@@ -87,9 +99,17 @@ sleep 1
 
 CYCLED_PROFILE=$(gdbus call --session --dest io.github.mzia.PopProfile --object-path /io/github/mzia/PopProfile --method io.github.mzia.PopProfile.GetActiveProfile)
 echo "    -> Cycled Profile from Daemon: $CYCLED_PROFILE"
+if [[ "$CYCLED_PROFILE" != *"dev"* ]]; then
+    echo "[-] Error: Expected cycled profile 'dev', got: $CYCLED_PROFILE"
+    exit 1
+fi
 
 CYCLED_ICON=$(gdbus call --session --dest "$APPLET_DEST" --object-path /StatusNotifierItem --method org.freedesktop.DBus.Properties.Get org.kde.StatusNotifierItem IconName)
 echo "    -> Cycled Icon: $CYCLED_ICON"
+if [[ "$CYCLED_ICON" != *"utilities-terminal-symbolic"* ]]; then
+    echo "[-] Error: Expected dev icon, got: $CYCLED_ICON"
+    exit 1
+fi
 
 echo -e "\n\033[0;32m[✔] All applet StatusNotifierItem & DBusMenu tests passed successfully!\033[0m"
 EOF

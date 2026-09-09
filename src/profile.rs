@@ -11,6 +11,7 @@ pub enum Profile {
     Secure,
 }
 
+#[allow(dead_code)]
 impl Profile {
     pub const ALL: [Profile; 4] = [
         Profile::Home,
@@ -67,7 +68,7 @@ impl FromStr for Profile {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().trim() {
-            "home" | "default" => Ok(Profile::Home),
+            "home" | "default" | "" => Ok(Profile::Home),
             "work" => Ok(Profile::Work),
             "dev" => Ok(Profile::Dev),
             "secure" => Ok(Profile::Secure),

@@ -17,16 +17,26 @@ pub fn state_file_path() -> String {
     if is_privileged() {
         STATE_FILE.to_string()
     } else {
-        std::env::var("XDG_RUNTIME_DIR")
-            .map(|d| format!("{}/popos-security-profile", d))
-            .unwrap_or_else(|_| "/tmp/popos-security-profile".to_string())
+        if let Ok(dir) = std::env::var("XDG_RUNTIME_DIR") {
+            if std::path::Path::new(&dir).is_dir() {
+                return format!("{}/popos-security-profile", dir);
+            }
+        }
+        "/tmp/popos-security-profile".to_string()
     }
 }
 
 pub fn get_active_profile() -> String {
     let path = state_file_path();
     fs::read_to_string(&path)
-        .map(|s| s.trim().to_string())
+        .map(|s| {
+            let trimmed = s.trim().to_string();
+            if trimmed.is_empty() {
+                "default".to_string()
+            } else {
+                trimmed
+            }
+        })
         .unwrap_or_else(|_| "default".to_string())
 }
 

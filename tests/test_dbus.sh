@@ -26,11 +26,18 @@ set -eo pipefail
 
 BIN="./target/release/pop-profile-daemon"
 
+TEST_STATE=$(mktemp)
+export POP_PROFILE_STATE_FILE="$TEST_STATE"
+
 echo "[*] Launching pop-profile-daemon on test session bus..."
 $BIN --daemon --session-bus &
 DAEMON_PID=$!
 
-trap "kill $DAEMON_PID 2>/dev/null || true" EXIT
+cleanup() {
+    kill $DAEMON_PID 2>/dev/null || true
+    rm -f "$TEST_STATE"
+}
+trap cleanup EXIT
 
 # Wait for D-Bus registration
 sleep 1
