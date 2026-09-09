@@ -12,7 +12,7 @@ pop-profile \- Context-aware security, developer, and lifestyle profile manager 
 [\fB\-\-test\fR]
 .br
 .B pop-profile
-[\fB\-\-reset\fR]
+[\fB\-r\fR | \fB\-\-reset\fR | \fB\-\-default\fR]
 .br
 .B pop-profile
 [\fB\-h\fR | \fB\-\-help\fR]
@@ -53,6 +53,12 @@ Configures \fBkernel.yama.ptrace_scope = 1\fR for debuggers (gdb, lldb, VS Code)
 .B Hardened Travel & Public Wi-Fi Mode
 .br
 Paranoid lockdown: closes all inbound ports, sets \fBkernel.yama.ptrace_scope = 2\fR against memory scraping, disables crash dumps, enforces anti-spoofing and SYN cookie protections, and sets a 5-minute screen lock.
+
+.TP
+.B \-\-reset\fR, \fB\-\-default
+.B Pop!_OS Factory Default Mode
+.br
+Restores the system to official Pop!_OS out-of-the-box defaults: disables and resets UFW firewall, removes custom sysctl and limits configurations, restores standard kernel parameters, sets desktop idle screen lock to 15 minutes, restores platform power profile to 'balanced', and resets battery charge thresholds to 100%.
 
 .SH ANTI-LOCKOUT GUARANTEES
 .B pop-profile

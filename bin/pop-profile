@@ -382,7 +382,21 @@ reset_to_defaults() {
     log_info "Reloading standard system sysctl..."
     sysctl --system >/dev/null 2>&1 || true
 
-    log_success "System security restored to factory Pop!_OS defaults!"
+    log_info "Restoring desktop screen idle timeout to Pop!_OS default (15 minutes)..."
+    set_desktop_idle_delay 900
+
+    log_info "Restoring platform power profile to 'balanced' and battery charge threshold to 100%..."
+    if command -v system76-power >/dev/null 2>&1; then
+        system76-power profile balanced >/dev/null 2>&1 || true
+        system76-power charge-thresholds --max 100 >/dev/null 2>&1 || true
+    elif command -v powerprofilesctl >/dev/null 2>&1; then
+        powerprofilesctl set balanced >/dev/null 2>&1 || true
+    fi
+    if [ -w /sys/class/power_supply/BAT0/charge_control_limit_max ]; then
+        echo 100 > /sys/class/power_supply/BAT0/charge_control_limit_max 2>/dev/null || true
+    fi
+
+    log_success "System security and power restored to factory Pop!_OS defaults!"
 }
 
 case "${1:-}" in
@@ -403,7 +417,8 @@ case "${1:-}" in
         echo "Management & Actions:"
         echo "  -i, --status    Display current security posture, active rules & ports"
         echo "  --test          Run automated anti-lockout & integrity test suite"
-        echo "  --reset         Reset all firewall and sysctl settings back to Pop!_OS factory defaults"
+        echo "  -r, --reset     Reset all settings back to Pop!_OS factory defaults"
+        echo "  --default       Alias for --reset"
         echo "  -h, --help      Show this help menu"
         exit 0
         ;;
@@ -455,7 +470,7 @@ case "${1:-}" in
         fi
         exit 0
         ;;
-    --reset)
+    -r|--reset|reset|--default|default)
         if [ "$EUID" -ne 0 ]; then
             log_error "Please run with sudo: sudo pop-profile --reset"
             exit 1
@@ -471,6 +486,7 @@ case "${1:-}" in
         echo "  sudo pop-profile --work      # Office, corporate VPN, printer"
         echo "  sudo pop-profile --dev       # Coding & debugging"
         echo "  sudo pop-profile --secure    # Lockdown for public Wi-Fi"
+        echo "  sudo pop-profile --reset     # Reset to Pop!_OS factory defaults"
         exit 0
         ;;
 esac

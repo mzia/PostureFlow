@@ -226,6 +226,9 @@ pub fn reset_to_defaults() -> Result<(), String> {
     let path = state_file_path();
     let _ = fs::remove_file(&path);
 
+    // Restore desktop idle lock timeout to Pop!_OS default (15 minutes = 900 seconds)
+    set_desktop_idle_delay(900);
+
     if !is_privileged() {
         return Ok(());
     }
@@ -237,6 +240,19 @@ pub fn reset_to_defaults() -> Result<(), String> {
     let _ = fs::remove_file(LIMITS_CONF);
 
     let _ = execute("sysctl", &["--system"]);
+
+    // Restore platform power profile to Pop!_OS factory default ('balanced')
+    let _ = execute("system76-power", &["profile", "balanced"])
+        .or_else(|_| execute("powerprofilesctl", &["set", "balanced"]));
+
+    // Restore battery charge threshold to 100% (unrestricted charging)
+    let _ = execute("system76-power", &["charge-thresholds", "--max", "100"])
+        .or_else(|_| {
+            fs::write("/sys/class/power_supply/BAT0/charge_control_limit_max", "100")
+                .map(|_| String::new())
+                .map_err(|e| e.to_string())
+        });
+
     Ok(())
 }
 

@@ -20,6 +20,7 @@ struct GuiApp {
     active_profile_id: String,
     active_tab: Tab,
     status_message: Option<(String, bool)>, // (message, is_error)
+    show_reset_confirm: bool,
 
     // Form inputs for adding entries
     new_port_str: String,
@@ -40,6 +41,7 @@ impl GuiApp {
             active_profile_id,
             active_tab: Tab::General,
             status_message: None,
+            show_reset_confirm: false,
             new_port_str: "8080/tcp".to_string(),
             new_port_comment: "Web Development".to_string(),
             new_interface_str: "docker0".to_string(),
@@ -58,6 +60,54 @@ impl GuiApp {
 
     fn current_profile(&self) -> Option<&ProfileConfig> {
         self.profiles.get(self.selected_index)
+    }
+
+    fn do_factory_reset(&mut self) {
+        let dbus_attempt = std::process::Command::new("gdbus")
+            .args([
+                "call",
+                "--system",
+                "--dest",
+                "io.github.mzia.PopProfile",
+                "--object-path",
+                "/io/github/mzia/PopProfile",
+                "--method",
+                "io.github.mzia.PopProfile.ResetToDefaults",
+            ])
+            .output();
+
+        let mut success = false;
+        let mut err_msg = String::new();
+
+        if let Ok(out) = dbus_attempt {
+            if out.status.success() {
+                success = true;
+            } else {
+                err_msg = String::from_utf8_lossy(&out.stderr).to_string();
+            }
+        }
+
+        if !success {
+            match system::reset_to_defaults() {
+                Ok(_) => success = true,
+                Err(e) => {
+                    if err_msg.is_empty() {
+                        err_msg = e;
+                    }
+                }
+            }
+        }
+
+        if success {
+            self.active_profile_id = "default".to_string();
+            self.refresh_profiles();
+            self.status_message = Some((
+                "Pop!_OS factory defaults restored successfully (UFW reset/disabled, balanced power, battery 100%).".to_string(),
+                false,
+            ));
+        } else {
+            self.status_message = Some((format!("Failed to reset factory defaults: {}", err_msg), true));
+        }
     }
 }
 
@@ -92,8 +142,13 @@ impl eframe::App for GuiApp {
             .default_size(240.0)
             .show(ui, |ui| {
                 ui.heading("Pop! Profiles");
+                let active_header = if self.active_profile_id == "default" {
+                    "Active: [FACTORY DEFAULT]".to_string()
+                } else {
+                    format!("Active: [{}]", self.active_profile_id.to_uppercase())
+                };
                 ui.label(
-                    egui::RichText::new(format!("Active: [{}]", self.active_profile_id.to_uppercase()))
+                    egui::RichText::new(active_header)
                         .color(egui::Color32::from_rgb(246, 166, 35))
                         .strong(),
                 );
@@ -103,8 +158,7 @@ impl eframe::App for GuiApp {
                     let mut switch_to = None;
                     for (i, prof) in self.profiles.iter().enumerate() {
                         let is_selected = i == self.selected_index;
-                        let is_active = prof.profile.id == self.active_profile_id
-                            || (self.active_profile_id == "default" && prof.profile.id == "home");
+                        let is_active = prof.profile.id == self.active_profile_id;
 
                         let label_text = if is_active {
                             format!("● {} [Active]", prof.profile.name)
@@ -123,6 +177,19 @@ impl eframe::App for GuiApp {
 
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
                     ui.add_space(8.0);
+
+                    // Reset to Factory Defaults Button
+                    if ui
+                        .button(
+                            egui::RichText::new("🔄 Reset to Factory Defaults")
+                                .color(egui::Color32::from_rgb(255, 120, 120)),
+                        )
+                        .clicked()
+                    {
+                        self.show_reset_confirm = true;
+                    }
+                    ui.separator();
+
                     // Export Config Button
                     if ui.button("📤 Export Selected (.toml)").clicked() {
                         if let Some(prof) = self.current_profile() {
@@ -217,6 +284,41 @@ impl eframe::App for GuiApp {
                     }
                 });
             });
+
+        // Reset to Factory Defaults Confirmation Modal
+        if self.show_reset_confirm {
+            egui::Window::new("Reset to Pop!_OS Factory Settings")
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ui.ctx(), |ui| {
+                    ui.heading("⚠️ Confirm Factory Reset");
+                    ui.add_space(6.0);
+                    ui.label("This will restore all system settings back to Pop!_OS factory defaults:");
+                    ui.label("• Disable and reset UFW firewall (allow standard traffic)");
+                    ui.label("• Remove custom sysctl optimizations and limits drop-ins");
+                    ui.label("• Restore platform power profile to 'Balanced'");
+                    ui.label("• Restore battery charge threshold to 100%");
+                    ui.label("• Restore desktop screen idle timeout to 15 minutes");
+                    ui.add_space(10.0);
+                    ui.horizontal(|ui| {
+                        if ui
+                            .button(
+                                egui::RichText::new("Yes, Reset to Factory Defaults")
+                                    .color(egui::Color32::from_rgb(255, 120, 120))
+                                    .strong(),
+                            )
+                            .clicked()
+                        {
+                            self.show_reset_confirm = false;
+                            self.do_factory_reset();
+                        }
+                        if ui.button("Cancel").clicked() {
+                            self.show_reset_confirm = false;
+                        }
+                    });
+                });
+        }
 
         // Central Editing Area
         egui::CentralPanel::default().show(ui, |ui| {
@@ -509,12 +611,39 @@ fn main() -> eframe::Result<()> {
                 println!("Usage: pop-profile-gui [OPTIONS]");
                 println!();
                 println!("Options:");
+                println!("  -r, --reset      Reset all system settings back to Pop!_OS factory defaults");
                 println!("  -h, --help       Print help information");
                 println!("  -V, --version    Print version information");
                 return Ok(());
             }
             "-V" | "--version" => {
                 println!("pop-profile-gui 1.0.0");
+                return Ok(());
+            }
+            "-r" | "--reset" | "reset" | "--default" | "default" => {
+                println!("[*] Resetting to Pop!_OS factory defaults...");
+                let dbus_res = std::process::Command::new("gdbus")
+                    .args([
+                        "call",
+                        "--system",
+                        "--dest",
+                        "io.github.mzia.PopProfile",
+                        "--object-path",
+                        "/io/github/mzia/PopProfile",
+                        "--method",
+                        "io.github.mzia.PopProfile.ResetToDefaults",
+                    ])
+                    .output();
+                if let Ok(out) = dbus_res {
+                    if out.status.success() {
+                        println!("[+] Successfully reset to Pop!_OS factory defaults (via D-Bus daemon).");
+                        return Ok(());
+                    }
+                }
+                match system::reset_to_defaults() {
+                    Ok(_) => println!("[+] Successfully reset to Pop!_OS factory defaults."),
+                    Err(e) => eprintln!("[-] Reset failed: {}", e),
+                }
                 return Ok(());
             }
             _ => {}

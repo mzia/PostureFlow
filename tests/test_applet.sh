@@ -115,5 +115,17 @@ if [[ "$CYCLED_ICON" != *"utilities-terminal-symbolic"* ]]; then
     exit 1
 fi
 
+echo "[*] Step 7: Simulating user click on Reset to Factory Defaults (Item ID 22)..."
+gdbus call --session --dest "$APPLET_DEST" --object-path /com/canonical/dbusmenu --method com.canonical.dbusmenu.Event 22 "clicked" "<0>" 0
+
+sleep 1
+
+RESET_PROFILE=$(gdbus call --session --dest io.github.mzia.PopProfile --object-path /io/github/mzia/PopProfile --method io.github.mzia.PopProfile.GetActiveProfile)
+echo "    -> Profile after Reset: $RESET_PROFILE"
+if [[ "$RESET_PROFILE" != *"default"* ]] && [[ "$RESET_PROFILE" != *"home"* ]]; then
+    echo "[-] Error: Expected active profile 'default' or 'home' after reset, got: $RESET_PROFILE"
+    exit 1
+fi
+
 echo -e "\n\033[0;32m[✔] All applet StatusNotifierItem & DBusMenu tests passed successfully!\033[0m"
 EOF

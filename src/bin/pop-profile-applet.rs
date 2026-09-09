@@ -30,6 +30,10 @@ struct Cli {
     /// Cycle to the next profile and exit
     #[arg(long, short = 'c')]
     cycle: bool,
+
+    /// Reset all settings to Pop!_OS factory defaults and exit
+    #[arg(long, short = 'r')]
+    reset: bool,
 }
 
 #[tokio::main]
@@ -38,6 +42,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     println!("[*] Initializing Pop! Profile Applet (v1.0.0)...");
     let daemon = DaemonClient::connect(cli.session_bus).await?;
+
+    if cli.reset {
+        println!("[*] Resetting to Pop!_OS factory defaults via D-Bus daemon...");
+        match daemon.reset_to_defaults().await {
+            Ok(()) => {
+                println!("[+] Successfully restored Pop!_OS factory defaults.");
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("[-] Failed to reset defaults: {}", e);
+                return Err(e);
+            }
+        }
+    }
 
     if cli.status {
         match daemon.get_status().await {

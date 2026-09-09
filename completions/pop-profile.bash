@@ -4,7 +4,7 @@ _pop_profile_completions() {
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="--home --work --dev --secure -i --status --test --reset -v --version -h --help"
+    opts="--home --work --dev --secure -i --status --test -r --reset --default -v --version -h --help"
 
     if [[ ${cur} == -* ]] ; then
         COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
