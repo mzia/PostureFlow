@@ -8,7 +8,8 @@ pub enum Profile {
     Home,
     Work,
     Dev,
-    Secure,
+    #[serde(alias = "secure")]
+    Travel,
 }
 
 #[allow(dead_code)]
@@ -17,7 +18,7 @@ impl Profile {
         Profile::Home,
         Profile::Work,
         Profile::Dev,
-        Profile::Secure,
+        Profile::Travel,
     ];
 
     pub fn as_str(&self) -> &'static str {
@@ -25,7 +26,7 @@ impl Profile {
             Profile::Home => "home",
             Profile::Work => "work",
             Profile::Dev => "dev",
-            Profile::Secure => "secure",
+            Profile::Travel => "travel",
         }
     }
 
@@ -34,7 +35,7 @@ impl Profile {
             Profile::Home => "Home / Streaming / Gaming",
             Profile::Work => "Work / Office / Corporate VPN",
             Profile::Dev => "Developer / Coding Mode",
-            Profile::Secure => "Hardened Travel / Lockdown",
+            Profile::Travel => "Travel / Public Wi-Fi Lockdown",
         }
     }
 
@@ -43,7 +44,7 @@ impl Profile {
             Profile::Home => "user-home-symbolic",
             Profile::Work => "applications-office-symbolic",
             Profile::Dev => "utilities-terminal-symbolic",
-            Profile::Secure => "security-high-symbolic",
+            Profile::Travel => "security-high-symbolic",
         }
     }
 
@@ -51,8 +52,8 @@ impl Profile {
         match self {
             Profile::Home => Profile::Work,
             Profile::Work => Profile::Dev,
-            Profile::Dev => Profile::Secure,
-            Profile::Secure => Profile::Home,
+            Profile::Dev => Profile::Travel,
+            Profile::Travel => Profile::Home,
         }
     }
 }
@@ -71,8 +72,8 @@ impl FromStr for Profile {
             "home" | "default" | "" => Ok(Profile::Home),
             "work" => Ok(Profile::Work),
             "dev" => Ok(Profile::Dev),
-            "secure" => Ok(Profile::Secure),
-            other => Err(format!("Unknown profile: '{}'. Expected home, work, dev, or secure.", other)),
+            "travel" | "secure" => Ok(Profile::Travel),
+            other => Err(format!("Unknown profile: '{}'. Expected home, work, dev, or travel.", other)),
         }
     }
 }

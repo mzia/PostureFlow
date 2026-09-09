@@ -101,7 +101,7 @@ show_status() {
         home)   echo -e "${BOLD}Current Profile:${NC} ${MAGENTA}${BOLD}[HOME / CASUAL / GAMING]${NC}" ;;
         work)   echo -e "${BOLD}Current Profile:${NC} ${BLUE}${BOLD}[WORK / OFFICE / VPN]${NC}" ;;
         dev)    echo -e "${BOLD}Current Profile:${NC} ${GREEN}${BOLD}[DEV / CODING MODE]${NC}" ;;
-        secure) echo -e "${BOLD}Current Profile:${NC} ${RED}${BOLD}[SECURE / HARDENED TRAVEL]${NC}" ;;
+        travel|secure) echo -e "${BOLD}Current Profile:${NC} ${RED}${BOLD}[TRAVEL / HARDENED LOCKDOWN]${NC}" ;;
         *)      echo -e "${BOLD}Current Profile:${NC} ${YELLOW}${BOLD}[DEFAULT / UNCONFIGURED]${NC}" ;;
     esac
 
@@ -311,8 +311,8 @@ EOF
     log_success "Developer / Coding Profile is now ACTIVE!"
 }
 
-apply_secure_profile() {
-    log_title "Activating SECURE / HARDENED Mode (Travel & Public Wi-Fi)"
+apply_travel_profile() {
+    log_title "Activating TRAVEL / HARDENED Mode (Lockdown & Public Wi-Fi)"
 
     if ! dpkg -l | grep -q "[ ]unattended-upgrades"; then
         log_info "Installing unattended-upgrades for automatic CVE patching..."
@@ -363,8 +363,12 @@ EOF
     ufw --force enable >/dev/null 2>&1
 
     set_desktop_idle_delay 300
-    echo "secure" > "$STATE_FILE"
-    log_success "Hardened Security Profile is now ACTIVE!"
+    echo "travel" > "$STATE_FILE"
+    log_success "Travel / Hardened Security Profile is now ACTIVE!"
+}
+
+apply_secure_profile() {
+    apply_travel_profile "$@"
 }
 
 reset_to_defaults() {
@@ -412,7 +416,8 @@ case "${1:-}" in
         echo "  --home          Home / Streaming / Gaming (Steam, Proton, LocalSend, GSConnect)"
         echo "  --work          Work / Office / Corporate VPN (VPN unblocked, dev ports locked to LAN)"
         echo "  --dev           Developer / Coding (debuggers attach, inotify 524k, dev ports open)"
-        echo "  --secure        Hardened Travel / Lockdown (coffee shops, airports, public Wi-Fi)"
+        echo "  -t, --travel    Hardened Travel / Lockdown (coffee shops, airports, public Wi-Fi)"
+        echo "  -s, --secure    Legacy alias for --travel"
         echo ""
         echo "Management & Actions:"
         echo "  -i, --status    Display current security posture, active rules & ports"
@@ -450,12 +455,12 @@ case "${1:-}" in
         apply_dev_profile
         exit 0
         ;;
-    -s|--secure)
+    -t|--travel|-s|--secure)
         if [ "$EUID" -ne 0 ]; then
-            log_error "Please run with sudo: sudo pop-profile --secure"
+            log_error "Please run with sudo: sudo pop-profile --travel"
             exit 1
         fi
-        apply_secure_profile
+        apply_travel_profile
         exit 0
         ;;
     --test)
@@ -485,7 +490,7 @@ case "${1:-}" in
         echo "  sudo pop-profile --home      # Streaming, gaming, phone sync"
         echo "  sudo pop-profile --work      # Office, corporate VPN, printer"
         echo "  sudo pop-profile --dev       # Coding & debugging"
-        echo "  sudo pop-profile --secure    # Lockdown for public Wi-Fi"
+        echo "  sudo pop-profile --travel    # Lockdown for public Wi-Fi (alias: --secure)"
         echo "  sudo pop-profile --reset     # Reset to Pop!_OS factory defaults"
         exit 0
         ;;

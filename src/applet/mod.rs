@@ -44,7 +44,7 @@ mod tests {
 
         assert_eq!(p2, Profile::Work);
         assert_eq!(p3, Profile::Dev);
-        assert_eq!(p4, Profile::Secure);
+        assert_eq!(p4, Profile::Travel);
         assert_eq!(p5, Profile::Home);
     }
 }

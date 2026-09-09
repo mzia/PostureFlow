@@ -31,7 +31,11 @@ struct Cli {
     dev: bool,
 
     /// Activate Hardened Travel / Lockdown mode
-    #[arg(long, short)]
+    #[arg(long, short = 't')]
+    travel: bool,
+
+    /// Legacy alias for --travel
+    #[arg(long, short = 's')]
     secure: bool,
 
     /// Activate a specific profile by ID (built-in or custom)
@@ -81,8 +85,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Some(Profile::Work)
     } else if cli.dev {
         Some(Profile::Dev)
-    } else if cli.secure {
-        Some(Profile::Secure)
+    } else if cli.travel || cli.secure {
+        Some(Profile::Travel)
     } else {
         None
     };
@@ -96,7 +100,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Default: print status
     println!("{}", system::get_status_report());
-    println!("\nUsage: pop-profile-daemon [--home | --work | --dev | --secure | --daemon | --status]");
+    println!("\nUsage: pop-profile-daemon [--home | --work | --dev | --travel | --daemon | --status]");
     Ok(())
 }
 
@@ -139,7 +143,8 @@ mod tests {
         assert_eq!(Profile::from_str("home").unwrap(), Profile::Home);
         assert_eq!(Profile::from_str("work").unwrap(), Profile::Work);
         assert_eq!(Profile::from_str("dev").unwrap(), Profile::Dev);
-        assert_eq!(Profile::from_str("secure").unwrap(), Profile::Secure);
+        assert_eq!(Profile::from_str("travel").unwrap(), Profile::Travel);
+        assert_eq!(Profile::from_str("secure").unwrap(), Profile::Travel);
         assert!(Profile::from_str("invalid").is_err());
     }
 
@@ -149,6 +154,7 @@ mod tests {
         assert_eq!(Profile::Home.icon_name(), "user-home-symbolic");
         assert_eq!(Profile::Work.icon_name(), "applications-office-symbolic");
         assert_eq!(Profile::Dev.icon_name(), "utilities-terminal-symbolic");
-        assert_eq!(Profile::Secure.icon_name(), "security-high-symbolic");
+        assert_eq!(Profile::Travel.as_str(), "travel");
+        assert_eq!(Profile::Travel.icon_name(), "security-high-symbolic");
     }
 }

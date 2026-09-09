@@ -115,7 +115,26 @@ if [[ "$CYCLED_ICON" != *"utilities-terminal-symbolic"* ]]; then
     exit 1
 fi
 
-echo "[*] Step 7: Simulating user click on Reset to Factory Defaults (Item ID 22)..."
+echo "[*] Step 7: Simulating left click (Activate) to cycle to Travel profile..."
+gdbus call --session --dest "$APPLET_DEST" --object-path /StatusNotifierItem --method org.kde.StatusNotifierItem.Activate 0 0
+
+sleep 1
+
+TRAVEL_PROFILE=$(gdbus call --session --dest io.github.mzia.PopProfile --object-path /io/github/mzia/PopProfile --method io.github.mzia.PopProfile.GetActiveProfile)
+echo "    -> Cycled Profile from Daemon: $TRAVEL_PROFILE"
+if [[ "$TRAVEL_PROFILE" != *"travel"* ]]; then
+    echo "[-] Error: Expected cycled profile 'travel', got: $TRAVEL_PROFILE"
+    exit 1
+fi
+
+TRAVEL_ICON=$(gdbus call --session --dest "$APPLET_DEST" --object-path /StatusNotifierItem --method org.freedesktop.DBus.Properties.Get org.kde.StatusNotifierItem IconName)
+echo "    -> Cycled Icon: $TRAVEL_ICON"
+if [[ "$TRAVEL_ICON" != *"security-high-symbolic"* ]]; then
+    echo "[-] Error: Expected travel icon, got: $TRAVEL_ICON"
+    exit 1
+fi
+
+echo "[*] Step 8: Simulating user click on Reset to Factory Defaults (Item ID 22)..."
 gdbus call --session --dest "$APPLET_DEST" --object-path /com/canonical/dbusmenu --method com.canonical.dbusmenu.Event 22 "clicked" "<0>" 0
 
 sleep 1

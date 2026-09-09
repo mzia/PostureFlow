@@ -22,7 +22,7 @@ impl PopProfileService {
 
 #[interface(name = "io.github.mzia.PopProfile")]
 impl PopProfileService {
-    /// Returns the active profile name ("home", "work", "dev", "secure", or "default")
+    /// Returns the active profile name ("home", "work", "dev", "travel", or "default")
     async fn get_active_profile(&self) -> String {
         let profile = self.active_profile.lock().await;
         profile.clone()

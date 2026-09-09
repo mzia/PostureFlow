@@ -101,12 +101,12 @@ impl DbusMenu {
             13 => {
                 props.insert(
                     "label".to_string(),
-                    Value::from("🔒 Secure Profile (Lockdown, Kill Unused)"),
+                    Value::from("✈️ Travel Profile (Lockdown, Public Wi-Fi)"),
                 );
                 props.insert("toggle-type".to_string(), Value::from("checkmark"));
                 props.insert(
                     "toggle-state".to_string(),
-                    Value::from(if active == Profile::Secure { 1i32 } else { 0i32 }),
+                    Value::from(if active == Profile::Travel { 1i32 } else { 0i32 }),
                 );
                 Some(props)
             }
@@ -217,7 +217,7 @@ impl DbusMenu {
                 10 => Some(MenuAction::SwitchProfile(Profile::Home)),
                 11 => Some(MenuAction::SwitchProfile(Profile::Work)),
                 12 => Some(MenuAction::SwitchProfile(Profile::Dev)),
-                13 => Some(MenuAction::SwitchProfile(Profile::Secure)),
+                13 => Some(MenuAction::SwitchProfile(Profile::Travel)),
                 21 => Some(MenuAction::ShowStatus),
                 22 => Some(MenuAction::ResetDefaults),
                 23 => Some(MenuAction::OpenGui),

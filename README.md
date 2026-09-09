@@ -40,7 +40,7 @@ Now switch postures anytime:
 sudo pop-profile --home      # Streaming, Proton gaming, phone sync (GSConnect)
 sudo pop-profile --work      # Office & corporate VPN (dev ports blocked to LAN)
 sudo pop-profile --dev       # Coding & debugging (ptrace allowed, 524k file watchers)
-sudo pop-profile --secure    # Coffee shops, airports & public Wi-Fi (stealth mode)
+sudo pop-profile --travel    # Coffee shops, airports & public Wi-Fi (stealth mode, alias: --secure)
 sudo pop-profile --reset     # Reset all settings back to Pop!_OS factory defaults
 pop-profile --status         # Inspect live posture without sudo
 ```
@@ -62,9 +62,9 @@ Linux security tools (like UFW, firewalld, or raw sysctl) are static. But laptop
 
 ## 📊 The Four Profiles
 
-| Feature / Setting | 🏠 Home | 💼 Work | 💻 Dev | 🛡️ Secure |
+| Feature / Setting | 🏠 Home | 💼 Work | 💻 Dev | ✈️ Travel |
 | :--- | :--- | :--- | :--- | :--- |
-| **Context** | Couch / Streaming / Gaming | Office / Corporate VPN | Coding / Testing / Lab | Coffee shop / Airport |
+| **Context** | Couch / Streaming / Gaming | Office / Corporate VPN | Coding / Testing / Lab | Coffee shop / Airport (Lockdown) |
 | **Inbound Firewall** | LAN trusted, WAN blocked | WAN blocked, VPN allowed | Dev ports open | **100% Blocked (Stealth)** |
 | **Dev Ports (3000, 8000...)** | ❌ Blocked | ❌ **Strictly blocked to LAN** | ✅ **Allowed** | ❌ Blocked |
 | **Corporate VPNs** | Allowed | ✅ **Unblocked (`tun+`, `wg+`)** | Allowed | Outbound only |
@@ -139,7 +139,7 @@ Desktop profile switching and custom profile imports use Polkit's `auth_admin_ke
 
 | Member | Type | Signature | Description |
 | :--- | :--- | :--- | :--- |
-| `GetActiveProfile` | Method | `() -> (s)` | Returns active profile identifier (`home`, `work`, `dev`, `secure`, or custom). |
+| `GetActiveProfile` | Method | `() -> (s)` | Returns active profile identifier (`home`, `work`, `dev`, `travel`, or custom). |
 | `SetProfile` | Method | `(s) -> ()` | Validates posture, applies kernel/firewall/power rules, and broadcasts signal. |
 | `GetStatus` | Method | `() -> (s)` | Returns live kernel, UFW firewall, and Framework power status report. |
 | `ResetToDefaults` | Method | `() -> ()` | Restores system settings to factory Pop!_OS defaults. |
@@ -160,9 +160,9 @@ Desktop profile switching and custom profile imports use Polkit's `auth_admin_ke
   - 🏠 **Home:** `user-home-symbolic`
   - 💼 **Work:** `applications-office-symbolic`
   - 💻 **Dev:** `utilities-terminal-symbolic`
-  - 🔒 **Secure:** `security-high-symbolic`
+  - ✈️ **Travel:** `security-high-symbolic` (alias: `secure`)
 * **One-Click Native Popover Menu:** Powered by the standard `com.canonical.dbusmenu` protocol, rendered natively inside the panel using your active COSMIC theme and accent colors.
-* **Instant Profile Cycling:** Left-click the panel icon directly to cycle instantly through profiles (`Home` ➔ `Work` ➔ `Dev` ➔ `Secure`).
+* **Instant Profile Cycling:** Left-click the panel icon directly to cycle instantly through profiles (`Home` ➔ `Work` ➔ `Dev` ➔ `Travel`).
 * **Direct GUI Launcher:** Click **`⚙ Configure Profiles & Import...`** to open the floating settings GUI.
 * **Desktop Notifications:** Dispatches native notifications on profile changes and security posture audits via `org.freedesktop.Notifications`.
 * **Resilient Watchdog:** Automatically reconnects and re-registers whenever `cosmic-panel` or the session restarts.
@@ -331,7 +331,7 @@ pop-profile-manager/
 ## 🗺️ Project Roadmap
 
 - [x] **Phase 1: CLI & Rust D-Bus Daemon**
-  - [x] 4 lifestyle/context profiles (Home, Work, Dev, Secure)
+  - [x] 4 lifestyle/context profiles (Home, Work, Dev, Travel)
   - [x] Anti-lockout invariant test suite
   - [x] Rust daemon with `zbus` on `io.github.mzia.PopProfile`
   - [x] Polkit policy with 5-minute cached admin authorization (`auth_admin_keep`)

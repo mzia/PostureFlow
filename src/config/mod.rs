@@ -31,7 +31,7 @@ pub fn builtin_profiles() -> Vec<ProfileConfig> {
         builtin_home(),
         builtin_work(),
         builtin_dev(),
-        builtin_secure(),
+        builtin_travel(),
     ]
 }
 
@@ -193,7 +193,7 @@ fn builtin_dev() -> ProfileConfig {
     }
 }
 
-fn builtin_secure() -> ProfileConfig {
+fn builtin_travel() -> ProfileConfig {
     let mut kernel = HashMap::new();
     kernel.insert("kernel.yama.ptrace_scope".to_string(), "2".to_string());
     kernel.insert("kernel.dmesg_restrict".to_string(), "1".to_string());
@@ -215,8 +215,8 @@ fn builtin_secure() -> ProfileConfig {
 
     ProfileConfig {
         profile: ProfileMetadata {
-            id: "secure".to_string(),
-            name: "Hardened Travel / Lockdown".to_string(),
+            id: "travel".to_string(),
+            name: "Travel / Public Wi-Fi Lockdown".to_string(),
             description: "Zero open ports, strict ICMP ignoring, aggressive ptrace prevention, and 2-minute screen lock.".to_string(),
             icon: "security-high-symbolic".to_string(),
             version: "1.0.0".to_string(),
@@ -287,7 +287,10 @@ fn scan_directory(
 }
 
 pub fn find_profile(id: &str) -> Option<ProfileConfig> {
-    let normalized = id.trim().to_lowercase();
+    let mut normalized = id.trim().to_lowercase();
+    if normalized == "secure" {
+        normalized = "travel".to_string();
+    }
     load_all_profiles()
         .into_iter()
         .find(|p| p.profile.id.to_lowercase() == normalized)
@@ -323,7 +326,7 @@ pub fn save_custom_profile(config: ProfileConfig, is_system: bool) -> Result<Pat
 
 pub fn delete_custom_profile(id: &str) -> Result<(), String> {
     let normalized = id.trim().to_lowercase();
-    if ["home", "work", "dev", "secure"].contains(&normalized.as_str()) {
+    if ["home", "work", "dev", "travel", "secure"].contains(&normalized.as_str()) {
         return Err("Cannot delete built-in system profile.".to_string());
     }
 
