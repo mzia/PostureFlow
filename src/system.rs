@@ -6,15 +6,34 @@ pub const STATE_FILE: &str = "/etc/popos-security-profile";
 pub const SYSCTL_CONF: &str = "/etc/sysctl.d/99-popos-security.conf";
 pub const LIMITS_CONF: &str = "/etc/security/limits.d/99-popos-security.conf";
 
+pub fn is_privileged() -> bool {
+    unsafe { libc::geteuid() == 0 }
+}
+
+pub fn state_file_path() -> String {
+    if let Ok(path) = std::env::var("POP_PROFILE_STATE_FILE") {
+        return path;
+    }
+    if is_privileged() {
+        STATE_FILE.to_string()
+    } else {
+        std::env::var("XDG_RUNTIME_DIR")
+            .map(|d| format!("{}/popos-security-profile", d))
+            .unwrap_or_else(|_| "/tmp/popos-security-profile".to_string())
+    }
+}
+
 pub fn get_active_profile() -> String {
-    fs::read_to_string(STATE_FILE)
+    let path = state_file_path();
+    fs::read_to_string(&path)
         .map(|s| s.trim().to_string())
         .unwrap_or_else(|_| "default".to_string())
 }
 
 pub fn save_active_profile(profile: Profile) -> Result<(), String> {
-    fs::write(STATE_FILE, profile.as_str())
-        .map_err(|e| format!("Failed to write state file {}: {}", STATE_FILE, e))
+    let path = state_file_path();
+    fs::write(&path, profile.as_str())
+        .map_err(|e| format!("Failed to write state file {}: {}", path, e))
 }
 
 fn execute(cmd: &str, args: &[&str]) -> Result<String, String> {
@@ -106,6 +125,9 @@ pub fn apply_profile(profile: Profile) -> Result<(), String> {
 }
 
 fn apply_home() -> Result<(), String> {
+    if !is_privileged() {
+        return Ok(());
+    }
     let sysctl_content = "\
 kernel.yama.ptrace_scope = 1
 kernel.dmesg_restrict = 0
@@ -147,6 +169,9 @@ net.ipv4.tcp_rfc1337 = 1
 }
 
 fn apply_work() -> Result<(), String> {
+    if !is_privileged() {
+        return Ok(());
+    }
     let sysctl_content = "\
 kernel.yama.ptrace_scope = 1
 kernel.dmesg_restrict = 1
@@ -189,6 +214,9 @@ net.ipv4.tcp_rfc1337 = 1
 }
 
 fn apply_dev() -> Result<(), String> {
+    if !is_privileged() {
+        return Ok(());
+    }
     let sysctl_content = "\
 kernel.yama.ptrace_scope = 1
 kernel.dmesg_restrict = 0
@@ -234,6 +262,9 @@ net.ipv4.tcp_rfc1337 = 1
 }
 
 fn apply_secure() -> Result<(), String> {
+    if !is_privileged() {
+        return Ok(());
+    }
     let sysctl_content = "\
 kernel.yama.ptrace_scope = 2
 kernel.dmesg_restrict = 1
@@ -277,12 +308,18 @@ net.ipv4.tcp_rfc1337 = 1
 }
 
 pub fn reset_to_defaults() -> Result<(), String> {
+    let path = state_file_path();
+    let _ = fs::remove_file(&path);
+
+    if !is_privileged() {
+        return Ok(());
+    }
+
     let _ = execute("ufw", &["--force", "disable"]);
     let _ = execute("ufw", &["--force", "reset"]);
 
     let _ = fs::remove_file(SYSCTL_CONF);
     let _ = fs::remove_file(LIMITS_CONF);
-    let _ = fs::remove_file(STATE_FILE);
 
     let _ = execute("sysctl", &["--system"]);
     Ok(())

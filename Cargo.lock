@@ -642,6 +642,7 @@ version = "1.0.0"
 dependencies = [
  "clap",
  "futures-util",
+ "libc",
  "serde",
  "serde_json",
  "tokio",
