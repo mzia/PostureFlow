@@ -148,6 +148,37 @@ sudo systemctl enable --now pop-profile-daemon
 
 ---
 
+---
+
+## 🖥️ Native COSMIC Desktop Panel Applet
+
+`pop-profile-applet` integrates directly into the **Pop!_OS COSMIC desktop panel** (`cosmic-applet-status-area`):
+
+* **Real-time Symbolic Icons:** Automatically synchronizes with your active profile:
+  - 🏠 **Home:** `user-home-symbolic`
+  - 💼 **Work:** `applications-office-symbolic`
+  - 💻 **Dev:** `utilities-terminal-symbolic`
+  - 🔒 **Secure:** `security-high-symbolic`
+* **One-Click Native Popover Menu:** Powered by the standard `com.canonical.dbusmenu` protocol, rendered natively inside the panel using your active COSMIC theme and accent colors.
+* **Instant Profile Cycling:** Left-click the panel icon directly to cycle instantly through profiles (`Home` ➔ `Work` ➔ `Dev` ➔ `Secure`).
+* **Desktop Notifications:** Dispatches native notifications on profile changes and security posture audits via `org.freedesktop.Notifications`.
+* **Resilient Watchdog:** Automatically reconnects and re-registers whenever `cosmic-panel` or the session restarts.
+* **Session Autostart:** Ships with a systemd user service (`pop-profile-applet.service`) and standard desktop entry (`io.github.mzia.PopProfile.Applet.desktop`).
+
+### Running the Applet
+```bash
+# Start in session
+pop-profile-applet
+
+# Query current posture
+pop-profile-applet --status
+
+# Quick cycle next profile
+pop-profile-applet --cycle
+```
+
+---
+
 ## 🔄 Self-Healing Post-Upgrade Hook
 
 `pop-profile` includes an APT post-invoke hook registered at `/etc/apt/apt.conf.d/99-popos-profile-health`. 
@@ -173,14 +204,25 @@ pop-profile-manager/
 ├── bin/
 │   └── pop-profile                  # Standalone CLI executable
 ├── src/
-│   ├── main.rs                      # Rust CLI & D-Bus daemon entrypoint
-│   ├── dbus.rs                      # zbus asynchronous D-Bus service & signals
+│   ├── lib.rs                       # Shared library modules
+│   ├── main.rs                      # Rust D-Bus daemon entrypoint
 │   ├── profile.rs                   # Profile enum & icon mappings
-│   └── system.rs                    # System controller (sysctl, ufw, limits)
+│   ├── system.rs                    # System controller (sysctl, ufw, limits)
+│   ├── dbus.rs                      # zbus asynchronous D-Bus service & signals
+│   ├── bin/
+│   │   └── pop-profile-applet.rs    # Native COSMIC Panel Applet entrypoint
+│   └── applet/
+│       ├── mod.rs                   # Applet module definitions
+│       ├── state.rs                 # Thread-safe profile state manager
+│       ├── client.rs                # System daemon proxy & notifications
+│       ├── menu.rs                  # com.canonical.dbusmenu provider
+│       └── sni.rs                   # org.kde.StatusNotifierItem provider
 ├── data/
+│   ├── io.github.mzia.PopProfile.Applet.desktop # COSMIC panel applet desktop entry
+│   ├── pop-profile-applet.service   # Systemd user session autostart service
+│   ├── pop-profile-daemon.service   # Systemd privileged system service
 │   ├── io.github.mzia.PopProfile.policy # Polkit passwordless authorization
-│   ├── io.github.mzia.PopProfile.conf   # D-Bus system bus permissions
-│   └── pop-profile-daemon.service   # Systemd service unit
+│   └── io.github.mzia.PopProfile.conf   # D-Bus system bus permissions
 ├── man/
 │   └── pop-profile.1                # Native Linux manual page
 ├── completions/
@@ -190,14 +232,15 @@ pop-profile-manager/
 │   └── build_deb.sh                 # Automated Debian .deb package builder
 ├── tests/
 │   ├── test_safety.sh               # 8-point automated anti-lockout test suite
-│   └── test_dbus.sh                 # D-Bus integration test suite
+│   ├── test_dbus.sh                 # D-Bus integration test suite
+│   └── test_applet.sh               # Applet StatusNotifierItem/DBusMenu integration test
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                   # CI testing workflow (Rust + Safety + D-Bus)
 │       └── release.yml              # Automated .deb build & GitHub Releases
 ├── install.sh                       # One-command system installer
 ├── uninstall.sh                     # Clean uninstaller (restores Pop!_OS defaults)
-├── Makefile                         # 'make install', 'make deb', 'make test', 'make uninstall'
+├── Makefile                         # 'make build', 'make install', 'make deb', 'make test'
 ├── LICENSE                          # MIT License (© M. Zia)
 └── README.md                        # Project documentation
 ```
@@ -216,9 +259,13 @@ pop-profile-manager/
   - [x] Debian `.deb` package generation (`scripts/build_deb.sh` / `make deb`)
   - [x] Standard systemd, Polkit, D-Bus, completions, and man page packaging
   - [x] Automated GitHub Actions release workflow (`.github/workflows/release.yml`)
-- [ ] **Phase 3: Native COSMIC Panel Applet**
-  - [ ] Rust `libcosmic` panel applet with live status icon
-  - [ ] Dropdown popover menu with one-click profile toggling
+- [x] **Phase 3: Native COSMIC Panel Applet**
+  - [x] Rust COSMIC panel applet (`pop-profile-applet`) with live status icon
+  - [x] Standard `StatusNotifierItem` + `com.canonical.dbusmenu` architecture
+  - [x] Dynamic symbolic icons matching Pop!_OS / COSMIC desktop theme
+  - [x] Popover dropdown menu with one-click profile switching and power status
+  - [x] Watchdog auto-reconnect on COSMIC panel / session restarts
+  - [x] Desktop entry (`X-CosmicApplet=true`) and systemd user service
 - [ ] **Phase 4: Flatpak Distribution**
   - [ ] Flatpak manifest with host D-Bus portal access
 

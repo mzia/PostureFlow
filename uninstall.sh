@@ -34,6 +34,10 @@ fi
 echo "[*] Removing installed files..."
 rm -f /usr/local/bin/pop-profile
 rm -f /usr/local/bin/pop-profile-daemon
+rm -f /usr/local/bin/pop-profile-applet
+rm -f /usr/local/bin/cosmic-applet-popprofile
+rm -f /usr/share/applications/io.github.mzia.PopProfile.Applet.desktop
+rm -f /usr/lib/systemd/user/pop-profile-applet.service
 rm -f /usr/share/polkit-1/actions/io.github.mzia.PopProfile.policy
 rm -f /usr/share/dbus-1/system.d/io.github.mzia.PopProfile.conf
 rm -f /etc/systemd/system/pop-profile-daemon.service

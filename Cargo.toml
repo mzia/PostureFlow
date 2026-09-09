@@ -7,13 +7,22 @@ description = "Context-aware security, developer, and lifestyle profile manager 
 license = "MIT"
 repository = "https://github.com/mzia/pop-profile-manager"
 
+[lib]
+name = "pop_profile"
+path = "src/lib.rs"
+
 [[bin]]
 name = "pop-profile-daemon"
 path = "src/main.rs"
 
+[[bin]]
+name = "pop-profile-applet"
+path = "src/bin/pop-profile-applet.rs"
+
 [dependencies]
 zbus = { version = "4", default-features = false, features = ["tokio"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "time"] }
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+futures-util = "0.3"

@@ -1,15 +1,22 @@
-.PHONY: install uninstall test help
+.PHONY: all build install uninstall test deb help
 
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
 MANDIR ?= $(PREFIX)/share/man/man1
 
+all: build
+
 help:
 	@echo "pop-profile Makefile"
 	@echo "Targets:"
-	@echo "  make install    - Install pop-profile binary, man page, and completions (requires sudo)"
+	@echo "  make build      - Compile Rust daemon and COSMIC applet in release mode"
+	@echo "  make install    - Install pop-profile CLI, daemon, COSMIC applet, and services (requires sudo)"
 	@echo "  make uninstall  - Remove installed files and reset defaults (requires sudo)"
-	@echo "  make test       - Run anti-lockout test suite"
+	@echo "  make test       - Run safety, D-Bus daemon, and COSMIC applet test suites"
+	@echo "  make deb        - Build Debian (.deb) package in dist/"
+
+build:
+	@cargo build --release
 
 install:
 	@sudo ./install.sh
@@ -20,6 +27,7 @@ uninstall:
 test:
 	@bash ./tests/test_safety.sh
 	@bash ./tests/test_dbus.sh
+	@bash ./tests/test_applet.sh
 
 deb:
 	@./scripts/build_deb.sh

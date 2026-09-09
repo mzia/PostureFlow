@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=Pop! Profile Manager
+Comment=COSMIC Panel Applet for Pop! Security & Power Profiles
+Exec=pop-profile-applet
+Icon=security-high-symbolic
+Terminal=false
+Type=Application
+Categories=System;Settings;COSMIC;
+StartupNotify=false
+NoDisplay=true
+X-CosmicApplet=true
+X-CosmicHoverPopup=Auto
+X-OverflowPriority=10

@@ -24,20 +24,40 @@ echo -e "\n${BOLD}${CYAN}=== Installing pop-profile & Rust D-Bus Daemon ===${NC}
 echo "[*] Installing CLI to /usr/local/bin/pop-profile..."
 install -m 755 "$SCRIPT_DIR/bin/pop-profile" /usr/local/bin/pop-profile
 
-# 2. Install Rust Daemon binary if built
+# 2. Install Rust Daemon & Applet binaries if built
 if [ -f "$SCRIPT_DIR/target/release/pop-profile-daemon" ]; then
     echo "[*] Installing Rust daemon to /usr/local/bin/pop-profile-daemon..."
     install -m 755 "$SCRIPT_DIR/target/release/pop-profile-daemon" /usr/local/bin/pop-profile-daemon
 fi
+if [ -f "$SCRIPT_DIR/target/release/pop-profile-applet" ]; then
+    echo "[*] Installing COSMIC Applet to /usr/local/bin/pop-profile-applet..."
+    install -m 755 "$SCRIPT_DIR/target/release/pop-profile-applet" /usr/local/bin/pop-profile-applet
+    ln -sf /usr/local/bin/pop-profile-applet /usr/local/bin/cosmic-applet-popprofile
+fi
 
-# 3. Install Polkit Policy (Passwordless desktop profile switching)
+# 3. Install COSMIC Desktop Entry & User Service
+if [ -f "$SCRIPT_DIR/data/io.github.mzia.PopProfile.Applet.desktop" ]; then
+    echo "[*] Installing COSMIC Applet desktop entry..."
+    install -d /usr/share/applications
+    install -m 644 "$SCRIPT_DIR/data/io.github.mzia.PopProfile.Applet.desktop" /usr/share/applications/io.github.mzia.PopProfile.Applet.desktop
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
+    fi
+fi
+if [ -f "$SCRIPT_DIR/data/pop-profile-applet.service" ]; then
+    echo "[*] Installing systemd user applet service..."
+    install -d /usr/lib/systemd/user
+    install -m 644 "$SCRIPT_DIR/data/pop-profile-applet.service" /usr/lib/systemd/user/pop-profile-applet.service
+fi
+
+# 4. Install Polkit Policy (Passwordless desktop profile switching)
 if [ -f "$SCRIPT_DIR/data/io.github.mzia.PopProfile.policy" ]; then
     echo "[*] Installing Polkit policy to /usr/share/polkit-1/actions/..."
     install -d /usr/share/polkit-1/actions
     install -m 644 "$SCRIPT_DIR/data/io.github.mzia.PopProfile.policy" /usr/share/polkit-1/actions/io.github.mzia.PopProfile.policy
 fi
 
-# 4. Install D-Bus System Bus Configuration
+# 5. Install D-Bus System Bus Configuration
 if [ -f "$SCRIPT_DIR/data/io.github.mzia.PopProfile.conf" ]; then
     echo "[*] Installing D-Bus system configuration..."
     install -d /usr/share/dbus-1/system.d
@@ -48,7 +68,7 @@ if [ -f "$SCRIPT_DIR/data/io.github.mzia.PopProfile.conf" ]; then
     fi
 fi
 
-# 5. Install Systemd Service Unit
+# 6. Install Systemd Service Unit
 if [ -f "$SCRIPT_DIR/data/pop-profile-daemon.service" ]; then
     echo "[*] Installing systemd daemon service..."
     install -m 644 "$SCRIPT_DIR/data/pop-profile-daemon.service" /etc/systemd/system/pop-profile-daemon.service

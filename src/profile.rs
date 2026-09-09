@@ -12,6 +12,13 @@ pub enum Profile {
 }
 
 impl Profile {
+    pub const ALL: [Profile; 4] = [
+        Profile::Home,
+        Profile::Work,
+        Profile::Dev,
+        Profile::Secure,
+    ];
+
     pub fn as_str(&self) -> &'static str {
         match self {
             Profile::Home => "home",
@@ -30,13 +37,21 @@ impl Profile {
         }
     }
 
-    #[allow(dead_code)]
     pub fn icon_name(&self) -> &'static str {
         match self {
             Profile::Home => "user-home-symbolic",
-            Profile::Work => "work-symbolic",
-            Profile::Dev => "applications-development-symbolic",
+            Profile::Work => "applications-office-symbolic",
+            Profile::Dev => "utilities-terminal-symbolic",
             Profile::Secure => "security-high-symbolic",
+        }
+    }
+
+    pub fn next(&self) -> Profile {
+        match self {
+            Profile::Home => Profile::Work,
+            Profile::Work => Profile::Dev,
+            Profile::Dev => Profile::Secure,
+            Profile::Secure => Profile::Home,
         }
     }
 }
@@ -52,7 +67,7 @@ impl FromStr for Profile {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().trim() {
-            "home" => Ok(Profile::Home),
+            "home" | "default" => Ok(Profile::Home),
             "work" => Ok(Profile::Work),
             "dev" => Ok(Profile::Dev),
             "secure" => Ok(Profile::Secure),

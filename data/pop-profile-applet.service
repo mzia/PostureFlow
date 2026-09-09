@@ -1,0 +1,13 @@
+[Unit]
+Description=Pop! Profile Manager COSMIC Panel Applet
+PartOf=graphical-session.target
+After=graphical-session.target pop-profile-daemon.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pop-profile-applet
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

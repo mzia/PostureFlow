@@ -29,6 +29,7 @@ jobs:
           bash -n uninstall.sh
           bash -n tests/test_safety.sh
           bash -n tests/test_dbus.sh
+          bash -n tests/test_applet.sh
 
       - name: Run Anti-Lockout Test Suite
         run: |
@@ -45,6 +46,10 @@ jobs:
       - name: Run D-Bus Integration Tests
         run: |
           bash tests/test_dbus.sh
+
+      - name: Run COSMIC Applet Integration Tests
+        run: |
+          bash tests/test_applet.sh
 
       - name: Verify Man Page
         run: |

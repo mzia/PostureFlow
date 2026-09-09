@@ -43,6 +43,8 @@ rm -rf "$STAGE_DIR"
 mkdir -p "$STAGE_DIR/DEBIAN"
 mkdir -p "$STAGE_DIR/usr/bin"
 mkdir -p "$STAGE_DIR/lib/systemd/system"
+mkdir -p "$STAGE_DIR/usr/lib/systemd/user"
+mkdir -p "$STAGE_DIR/usr/share/applications"
 mkdir -p "$STAGE_DIR/usr/share/polkit-1/actions"
 mkdir -p "$STAGE_DIR/usr/share/dbus-1/system.d"
 mkdir -p "$STAGE_DIR/usr/share/man/man1"
@@ -54,9 +56,18 @@ mkdir -p "$DIST_DIR"
 # 3. Copy Binaries
 install -m 755 "$REPO_ROOT/bin/pop-profile" "$STAGE_DIR/usr/bin/pop-profile"
 install -m 755 "$REPO_ROOT/target/release/pop-profile-daemon" "$STAGE_DIR/usr/bin/pop-profile-daemon"
+install -m 755 "$REPO_ROOT/target/release/pop-profile-applet" "$STAGE_DIR/usr/bin/pop-profile-applet"
+ln -sf pop-profile-applet "$STAGE_DIR/usr/bin/cosmic-applet-popprofile"
 
-# 4. Copy Service, Polkit, D-Bus
+if command -v strip >/dev/null 2>&1; then
+    strip --strip-unneeded "$STAGE_DIR/usr/bin/pop-profile-daemon"
+    strip --strip-unneeded "$STAGE_DIR/usr/bin/pop-profile-applet"
+fi
+
+# 4. Copy Service, Polkit, D-Bus, Desktop Entry
 install -m 644 "$REPO_ROOT/data/pop-profile-daemon.service" "$STAGE_DIR/lib/systemd/system/pop-profile-daemon.service"
+install -m 644 "$REPO_ROOT/data/pop-profile-applet.service" "$STAGE_DIR/usr/lib/systemd/user/pop-profile-applet.service"
+install -m 644 "$REPO_ROOT/data/io.github.mzia.PopProfile.Applet.desktop" "$STAGE_DIR/usr/share/applications/io.github.mzia.PopProfile.Applet.desktop"
 install -m 644 "$REPO_ROOT/data/io.github.mzia.PopProfile.policy" "$STAGE_DIR/usr/share/polkit-1/actions/io.github.mzia.PopProfile.policy"
 install -m 644 "$REPO_ROOT/data/io.github.mzia.PopProfile.conf" "$STAGE_DIR/usr/share/dbus-1/system.d/io.github.mzia.PopProfile.conf"
 
@@ -107,9 +118,12 @@ case "$1" in
             systemctl restart pop-profile-daemon.service >/dev/null 2>&1 || true
         fi
 
-        # Update man database
+        # Update man and desktop databases
         if which mandb >/dev/null 2>&1; then
             mandb -q >/dev/null 2>&1 || true
+        fi
+        if which update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
         fi
         ;;
 esac
@@ -152,10 +166,16 @@ case "$1" in
         if which sysctl >/dev/null 2>&1; then
             sysctl --system >/dev/null 2>&1 || true
         fi
+        if which update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
+        fi
         ;;
     remove)
         if [ -d /run/systemd/system ]; then
             systemctl --system daemon-reload >/dev/null 2>&1 || true
+        fi
+        if which update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
         fi
         ;;
 esac
