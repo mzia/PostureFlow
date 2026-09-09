@@ -1,0 +1,52 @@
+app-id: io.github.mzia.PopProfile
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: pop-profile-gui
+
+finish-args:
+  # Graphical desktop integration (Wayland + X11 fallback + OpenGL/DRI)
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+
+  # Host D-Bus communication with privileged system daemon
+  - --system-talk-name=io.github.mzia.PopProfile
+
+  # Desktop integration portals (file picker for TOML import/export, notifications)
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --talk-name=org.freedesktop.portal.FileChooser
+
+  # StatusNotifierItem & tray integration (if running applet or tray indicators)
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --own-name=org.kde.StatusNotifierItem-pop-profile
+
+  # Custom profile persistence in user's XDG config
+  - --filesystem=xdg-config/pop-profile:create
+
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/pop-profile/cargo
+
+modules:
+  - name: pop-profile
+    buildsystem: simple
+    build-commands:
+      # Build GUI binary using the SDK's stable Rust compiler with vendored crates
+      - cargo --offline build --release --bin pop-profile-gui --bin pop-profile-applet
+      # Install binaries to Flatpak prefix /app/bin
+      - install -Dm755 target/release/pop-profile-gui /app/bin/pop-profile-gui
+      - install -Dm755 target/release/pop-profile-applet /app/bin/pop-profile-applet
+      # Install desktop file, metainfo, and icons
+      - install -Dm644 data/io.github.mzia.PopProfile.desktop /app/share/applications/io.github.mzia.PopProfile.desktop
+      - install -Dm644 data/io.github.mzia.PopProfile.metainfo.xml /app/share/metainfo/io.github.mzia.PopProfile.metainfo.xml
+      - install -Dm644 data/icons/io.github.mzia.PopProfile.svg /app/share/icons/hicolor/scalable/apps/io.github.mzia.PopProfile.svg
+    sources:
+      - type: dir
+        path: .
+      - cargo-sources.json

@@ -1,0 +1,60 @@
+name: Flatpak Build & Verification
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  flatpak-verify:
+    name: Verify Flatpak Metadata & Sources
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install validation tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq appstream desktop-file-utils python3
+
+      - name: Validate AppStream Metainfo
+        run: |
+          appstreamcli validate --no-net data/io.github.mzia.PopProfile.metainfo.xml
+
+      - name: Validate Desktop File
+        run: |
+          desktop-file-validate data/io.github.mzia.PopProfile.desktop
+
+      - name: Generate Cargo Sources
+        run: |
+          python3 scripts/generate_cargo_sources.py Cargo.lock -o cargo-sources.json
+          test -s cargo-sources.json
+
+  flatpak-build:
+    name: Build Flatpak Bundle
+    needs: flatpak-verify
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-builder-lint:latest
+      options: --privileged
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flatpak Builder
+        uses: flatpak/flatpak-builder-action@v1
+        with:
+          bundle: io.github.mzia.PopProfile.flatpak
+          manifest-path: io.github.mzia.PopProfile.yml
+          run-tests: false
+          branch: stable
+
+      - name: Upload Flatpak Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PopProfile-flatpak
+          path: io.github.mzia.PopProfile.flatpak

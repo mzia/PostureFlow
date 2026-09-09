@@ -35,6 +35,17 @@ sudo dpkg -i dist/pop-profile_1.0.0_amd64.deb
 sudo ./install.sh
 ```
 
+### Option 3: Install via Flatpak Bundle
+
+```bash
+# Build or install the sandboxed Flatpak package
+make flatpak
+flatpak install --user dist/io.github.mzia.PopProfile.flatpak
+
+# Run Flatpak application
+flatpak run io.github.mzia.PopProfile
+```
+
 Now switch postures anytime:
 ```bash
 sudo pop-profile --home      # Streaming, Proton gaming, phone sync (GSConnect)
@@ -358,8 +369,15 @@ pop-profile-manager/
   - [x] Interactive tabbed editor (General, Firewall, Kernel, Framework Power)
   - [x] Live "Test & Verify Safety" pre-flight checks
   - [x] Direct launcher integration in COSMIC top bar panel applet menu
-- [ ] **Phase 6: Flatpak Distribution**
-  - [ ] Flatpak manifest with host D-Bus portal access
+- [x] **Phase 6: Flatpak Distribution**
+  - [x] Flathub-compliant Flatpak manifest (`io.github.mzia.PopProfile.yml`)
+  - [x] Sandboxed desktop portal integration (Wayland, X11 fallback, DRI, file chooser)
+  - [x] Host system D-Bus portal access (`io.github.mzia.PopProfile`) for privileged operations
+  - [x] AppStream 1.0 metainfo specification (`data/io.github.mzia.PopProfile.metainfo.xml`)
+  - [x] Scalable vector application iconography (`data/icons/io.github.mzia.PopProfile.svg`)
+  - [x] Zero-dependency offline cargo sources generator (`scripts/generate_cargo_sources.py`)
+  - [x] Automated builder & packager (`scripts/build_flatpak.sh` / `make flatpak`)
+  - [x] Automated GitHub Actions Flatpak CI workflow (`.github/workflows/flatpak.yml`)
 
 ---
 
