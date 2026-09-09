@@ -40,10 +40,14 @@ pub fn get_active_profile() -> String {
         .unwrap_or_else(|_| "default".to_string())
 }
 
-pub fn save_active_profile(profile: Profile) -> Result<(), String> {
+pub fn save_active_profile_str(name: &str) -> Result<(), String> {
     let path = state_file_path();
-    fs::write(&path, profile.as_str())
+    fs::write(&path, name)
         .map_err(|e| format!("Failed to write state file {}: {}", path, e))
+}
+
+pub fn save_active_profile(profile: Profile) -> Result<(), String> {
+    save_active_profile_str(profile.as_str())
 }
 
 fn execute(cmd: &str, args: &[&str]) -> Result<String, String> {
@@ -123,197 +127,98 @@ pub fn set_desktop_idle_delay(seconds: u32) {
 }
 
 pub fn apply_profile(profile: Profile) -> Result<(), String> {
-    match profile {
-        Profile::Home => apply_home(),
-        Profile::Work => apply_work(),
-        Profile::Dev => apply_dev(),
-        Profile::Secure => apply_secure(),
-    }?;
-
-    save_active_profile(profile)?;
-    Ok(())
+    apply_profile_by_id(profile.as_str())
 }
 
-fn apply_home() -> Result<(), String> {
+pub fn apply_profile_by_id(id: &str) -> Result<(), String> {
+    if let Some(config) = crate::config::find_profile(id) {
+        apply_profile_config(&config)
+    } else {
+        Err(format!("Profile '{}' not found.", id))
+    }
+}
+
+pub fn apply_profile_config(config: &crate::config::ProfileConfig) -> Result<(), String> {
     if !is_privileged() {
+        save_active_profile_str(&config.profile.id)?;
         return Ok(());
     }
-    let sysctl_content = "\
-kernel.yama.ptrace_scope = 1
-kernel.dmesg_restrict = 0
-kernel.kptr_restrict = 1
-kernel.unprivileged_bpf_disabled = 2
-fs.suid_dumpable = 2
-vm.max_map_count = 1048576
-fs.inotify.max_user_watches = 524288
-fs.inotify.max_user_instances = 512
-net.ipv4.conf.all.rp_filter = 1
-net.ipv4.conf.default.rp_filter = 1
-net.ipv4.tcp_syncookies = 1
-net.ipv4.tcp_rfc1337 = 1
-";
-    fs::write(SYSCTL_CONF, sysctl_content).map_err(|e| format!("Writing sysctl failed: {}", e))?;
-    let _ = execute("sysctl", &["-p", SYSCTL_CONF]);
 
-    let _ = execute("ufw", &["--force", "default", "deny", "incoming"]);
-    let _ = execute("ufw", &["--force", "default", "allow", "outgoing"]);
-    let _ = execute("ufw", &["allow", "in", "on", "lo"]);
-    let _ = execute("ufw", &["allow", "out", "on", "lo"]);
+    // 1. Sysctls
+    if !config.kernel.is_empty() {
+        let mut sysctl_content = String::new();
+        for (k, v) in &config.kernel {
+            sysctl_content.push_str(&format!("{} = {}\n", k, v));
+        }
+        fs::write(SYSCTL_CONF, sysctl_content)
+            .map_err(|e| format!("Writing sysctl failed: {}", e))?;
+        let _ = execute("sysctl", &["-p", SYSCTL_CONF]);
+    }
+
+    // 2. Limits
+    let mut limits_content = String::new();
+    if let Some(ref core) = config.limits.core_dump {
+        limits_content.push_str(&format!("* soft core {}\n", core));
+    }
+    if let Some(nofile) = config.limits.nofile_soft {
+        limits_content.push_str(&format!("* soft nofile {}\n", nofile));
+    }
+    if let Some(nofile) = config.limits.nofile_hard {
+        limits_content.push_str(&format!("* hard nofile {}\n", nofile));
+    }
+    if !limits_content.is_empty() {
+        let _ = fs::write(LIMITS_CONF, limits_content);
+    }
+
+    // 3. Firewall
+    let _ = execute("ufw", &["--force", "default", &config.firewall.default_incoming, "incoming"]);
+    let _ = execute("ufw", &["--force", "default", &config.firewall.default_outgoing, "outgoing"]);
+
+    if config.firewall.allow_loopback {
+        let _ = execute("ufw", &["allow", "in", "on", "lo"]);
+        let _ = execute("ufw", &["allow", "out", "on", "lo"]);
+    }
 
     clean_ufw_custom_rules();
 
-    let _ = execute("ufw", &["allow", "27031:27036/udp", "comment", "Steam Remote Play"]);
-    let _ = execute("ufw", &["allow", "27036:27037/tcp", "comment", "Steam Remote Play"]);
-    let _ = execute("ufw", &["allow", "27040/tcp", "comment", "Steam LAN Game Download"]);
-    let _ = execute("ufw", &["allow", "1714:1764/tcp", "comment", "GSConnect Phone Sync"]);
-    let _ = execute("ufw", &["allow", "1714:1764/udp", "comment", "GSConnect Phone Sync"]);
-    let _ = execute("ufw", &["allow", "53317/tcp", "comment", "LocalSend File Share"]);
-    let _ = execute("ufw", &["allow", "53317/udp", "comment", "LocalSend File Share"]);
-    let _ = execute("ufw", &["allow", "5353/udp", "comment", "mDNS Chromecast"]);
-
-    ensure_ssh_safety();
-    let _ = execute("ufw", &["--force", "enable"]);
-
-    set_desktop_idle_delay(1800);
-    Ok(())
-}
-
-fn apply_work() -> Result<(), String> {
-    if !is_privileged() {
-        return Ok(());
-    }
-    let sysctl_content = "\
-kernel.yama.ptrace_scope = 1
-kernel.dmesg_restrict = 1
-kernel.kptr_restrict = 1
-kernel.unprivileged_bpf_disabled = 2
-fs.suid_dumpable = 0
-fs.inotify.max_user_watches = 524288
-fs.inotify.max_user_instances = 512
-net.ipv4.conf.all.rp_filter = 1
-net.ipv4.conf.default.rp_filter = 1
-net.ipv4.conf.all.accept_redirects = 0
-net.ipv4.conf.default.accept_redirects = 0
-net.ipv6.conf.all.accept_redirects = 0
-net.ipv6.conf.default.accept_redirects = 0
-net.ipv4.tcp_syncookies = 1
-net.ipv4.tcp_rfc1337 = 1
-";
-    fs::write(SYSCTL_CONF, sysctl_content).map_err(|e| format!("Writing sysctl failed: {}", e))?;
-    let _ = execute("sysctl", &["-p", SYSCTL_CONF]);
-
-    let _ = execute("ufw", &["--force", "default", "deny", "incoming"]);
-    let _ = execute("ufw", &["--force", "default", "allow", "outgoing"]);
-    let _ = execute("ufw", &["allow", "in", "on", "lo"]);
-    let _ = execute("ufw", &["allow", "out", "on", "lo"]);
-
-    clean_ufw_custom_rules();
-
-    for iface in ["tun+", "tap+", "wg+", "tailscale+"] {
-        let _ = execute("ufw", &["allow", "in", "on", iface, "comment", "Corporate VPN"]);
-        let _ = execute("ufw", &["allow", "out", "on", iface, "comment", "Corporate VPN"]);
-    }
-    let _ = execute("ufw", &["allow", "631/tcp", "comment", "Office Printing (CUPS)"]);
-    let _ = execute("ufw", &["allow", "5353/udp", "comment", "Office mDNS Discovery"]);
-
-    ensure_ssh_safety();
-    let _ = execute("ufw", &["--force", "enable"]);
-
-    set_desktop_idle_delay(300);
-    Ok(())
-}
-
-fn apply_dev() -> Result<(), String> {
-    if !is_privileged() {
-        return Ok(());
-    }
-    let sysctl_content = "\
-kernel.yama.ptrace_scope = 1
-kernel.dmesg_restrict = 0
-kernel.kptr_restrict = 1
-kernel.unprivileged_bpf_disabled = 2
-fs.suid_dumpable = 2
-fs.inotify.max_user_watches = 524288
-fs.inotify.max_user_instances = 512
-net.ipv4.conf.all.rp_filter = 1
-net.ipv4.conf.default.rp_filter = 1
-net.ipv4.tcp_syncookies = 1
-net.ipv4.tcp_rfc1337 = 1
-";
-    fs::write(SYSCTL_CONF, sysctl_content).map_err(|e| format!("Writing sysctl failed: {}", e))?;
-    let _ = execute("sysctl", &["-p", SYSCTL_CONF]);
-
-    let _ = fs::write(LIMITS_CONF, "* soft core unlimited\n");
-
-    let _ = execute("ufw", &["--force", "default", "deny", "incoming"]);
-    let _ = execute("ufw", &["--force", "default", "allow", "outgoing"]);
-    let _ = execute("ufw", &["allow", "in", "on", "lo"]);
-    let _ = execute("ufw", &["allow", "out", "on", "lo"]);
-
-    clean_ufw_custom_rules();
-
-    for iface in ["docker0", "podman0"] {
-        if std::path::Path::new(&format!("/sys/class/net/{}", iface)).exists() {
-            let _ = execute("ufw", &["allow", "in", "on", iface]);
-            let _ = execute("ufw", &["allow", "out", "on", iface]);
+    for iface in &config.firewall.allow_interfaces {
+        if iface.contains('+') || std::path::Path::new(&format!("/sys/class/net/{}", iface)).exists() {
+            let _ = execute("ufw", &["allow", "in", "on", iface, "comment", "Profile Interface"]);
+            let _ = execute("ufw", &["allow", "out", "on", iface, "comment", "Profile Interface"]);
         }
     }
 
-    let ports = ["3000", "5000", "5173", "8000", "8080", "8888", "9000"];
-    for p in ports {
-        let _ = execute("ufw", &["allow", &format!("{}/tcp", p), "comment", "Dev local port"]);
+    for rule in &config.firewall.allow_ports {
+        if !rule.comment.is_empty() {
+            let _ = execute("ufw", &["allow", &rule.port, "comment", &rule.comment]);
+        } else {
+            let _ = execute("ufw", &["allow", &rule.port]);
+        }
     }
 
     ensure_ssh_safety();
     let _ = execute("ufw", &["--force", "enable"]);
 
-    set_desktop_idle_delay(900);
-    Ok(())
-}
-
-fn apply_secure() -> Result<(), String> {
-    if !is_privileged() {
-        return Ok(());
+    // 4. Desktop idle delay
+    if let Some(idle) = config.desktop.idle_delay_seconds {
+        set_desktop_idle_delay(idle);
     }
-    let sysctl_content = "\
-kernel.yama.ptrace_scope = 2
-kernel.dmesg_restrict = 1
-kernel.kptr_restrict = 2
-kernel.unprivileged_bpf_disabled = 2
-fs.suid_dumpable = 0
-net.ipv4.conf.all.rp_filter = 1
-net.ipv4.conf.default.rp_filter = 1
-net.ipv4.conf.all.accept_redirects = 0
-net.ipv4.conf.default.accept_redirects = 0
-net.ipv6.conf.all.accept_redirects = 0
-net.ipv6.conf.default.accept_redirects = 0
-net.ipv4.conf.all.send_redirects = 0
-net.ipv4.conf.default.send_redirects = 0
-net.ipv4.conf.all.accept_source_route = 0
-net.ipv4.conf.default.accept_source_route = 0
-net.ipv6.conf.all.accept_source_route = 0
-net.ipv6.conf.default.accept_source_route = 0
-net.ipv4.icmp_echo_ignore_broadcasts = 1
-net.ipv4.tcp_syncookies = 1
-net.ipv4.tcp_rfc1337 = 1
-";
-    fs::write(SYSCTL_CONF, sysctl_content).map_err(|e| format!("Writing sysctl failed: {}", e))?;
-    let _ = execute("sysctl", &["-p", SYSCTL_CONF]);
 
-    let _ = fs::write(LIMITS_CONF, "* hard core 0\n* soft core 0\n");
+    // 5. Framework Power
+    if let Some(prof) = config.power.power_profile.as_deref() {
+        let _ = execute("system76-power", &["profile", prof])
+            .or_else(|_| execute("powerprofilesctl", &["set", prof]));
+    }
+    if let Some(charge_limit) = config.power.battery_charge_limit {
+        let _ = execute("system76-power", &["charge-thresholds", "--max", &charge_limit.to_string()])
+            .or_else(|_| {
+                fs::write("/sys/class/power_supply/BAT0/charge_control_limit_max", charge_limit.to_string())
+                    .map(|_| String::new())
+                    .map_err(|e| e.to_string())
+            });
+    }
 
-    let _ = execute("ufw", &["--force", "default", "deny", "incoming"]);
-    let _ = execute("ufw", &["--force", "default", "allow", "outgoing"]);
-    let _ = execute("ufw", &["allow", "in", "on", "lo"]);
-    let _ = execute("ufw", &["allow", "out", "on", "lo"]);
-
-    clean_ufw_custom_rules();
-    ensure_ssh_safety();
-
-    let _ = execute("ufw", &["logging", "low"]);
-    let _ = execute("ufw", &["--force", "enable"]);
-
-    set_desktop_idle_delay(300);
+    save_active_profile_str(&config.profile.id)?;
     Ok(())
 }
 

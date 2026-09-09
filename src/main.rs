@@ -1,11 +1,8 @@
-mod profile;
-mod system;
-mod dbus;
-
 use std::error::Error;
 use clap::Parser;
-use profile::Profile;
-use dbus::{PopProfileService, DBUS_INTERFACE, DBUS_PATH};
+use pop_profile::profile::Profile;
+use pop_profile::dbus::{PopProfileService, DBUS_INTERFACE, DBUS_PATH};
+use pop_profile::system;
 
 #[derive(Parser, Debug)]
 #[command(name = "pop-profile-daemon")]
@@ -37,6 +34,10 @@ struct Cli {
     #[arg(long, short)]
     secure: bool,
 
+    /// Activate a specific profile by ID (built-in or custom)
+    #[arg(long, short = 'p')]
+    profile: Option<String>,
+
     /// Display current context posture and open ports
     #[arg(long, short = 'i')]
     status: bool,
@@ -64,6 +65,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         println!("[*] Resetting firewall and sysctl to Pop!_OS factory defaults...");
         system::reset_to_defaults().map_err(|e| e)?;
         println!("[+] Reset complete.");
+        return Ok(());
+    }
+
+    if let Some(ref prof_id) = cli.profile {
+        println!("[*] Applying profile: {}...", prof_id);
+        system::apply_profile_by_id(prof_id).map_err(|e| e)?;
+        println!("[+] Successfully activated [{}] mode!", prof_id.to_uppercase());
         return Ok(());
     }
 

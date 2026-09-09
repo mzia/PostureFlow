@@ -1,8 +1,6 @@
-use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use zbus::{interface, fdo};
-use crate::profile::Profile;
 use crate::system;
 
 pub const DBUS_INTERFACE: &str = "io.github.mzia.PopProfile";
@@ -40,21 +38,89 @@ impl PopProfileService {
     ) -> fdo::Result<()> {
         check_polkit_auth(conn, hdr.sender(), "io.github.mzia.PopProfile.set-profile").await?;
 
-        let parsed = Profile::from_str(&profile)
-            .map_err(|e| fdo::Error::InvalidArgs(e))?;
-
-        system::apply_profile(parsed)
+        let target_id = profile.trim().to_lowercase();
+        system::apply_profile_by_id(&target_id)
             .map_err(|e| fdo::Error::Failed(format!("Failed to apply profile: {}", e)))?;
 
         let mut current = self.active_profile.lock().await;
-        *current = parsed.as_str().to_string();
+        *current = target_id.clone();
 
         // Emit ProfileChanged signal
-        Self::profile_changed(&ctxt, parsed.as_str())
+        Self::profile_changed(&ctxt, &target_id)
             .await
             .map_err(|e| fdo::Error::Failed(e.to_string()))?;
 
         Ok(())
+    }
+
+    /// Returns list of available profiles: (id, name, description, icon, is_active)
+    async fn list_profiles(&self) -> Vec<(String, String, String, String, bool)> {
+        let active = self.active_profile.lock().await.clone();
+        crate::config::load_all_profiles()
+            .into_iter()
+            .map(|p| {
+                let is_active = p.profile.id == active
+                    || (active == "default" && p.profile.id == "home");
+                (
+                    p.profile.id,
+                    p.profile.name,
+                    p.profile.description,
+                    p.profile.icon,
+                    is_active,
+                )
+            })
+            .collect()
+    }
+
+    /// Returns full TOML configuration for a specific profile ID
+    async fn get_profile_details(&self, id: String) -> fdo::Result<String> {
+        let conf = crate::config::find_profile(&id)
+            .ok_or_else(|| fdo::Error::InvalidArgs(format!("Profile '{}' not found", id)))?;
+        conf.to_toml()
+            .map_err(|e| fdo::Error::Failed(format!("Failed to serialize TOML: {}", e)))
+    }
+
+    /// Validates a custom profile TOML without applying: returns (is_valid, warnings, sanitized_toml)
+    async fn validate_profile(&self, toml_content: String) -> fdo::Result<(bool, Vec<String>, String)> {
+        let parsed = crate::config::ProfileConfig::from_toml(&toml_content)
+            .map_err(|e| fdo::Error::InvalidArgs(format!("TOML syntax error: {}", e)))?;
+        let report = crate::config::validate_and_sanitize(parsed)
+            .map_err(|e| fdo::Error::InvalidArgs(format!("Safety validation failed: {}", e)))?;
+        let sanitized_toml = report
+            .sanitized_config
+            .to_toml()
+            .map_err(|e| fdo::Error::Failed(format!("TOML serialization error: {}", e)))?;
+        Ok((report.is_valid, report.warnings, sanitized_toml))
+    }
+
+    /// Saves a custom profile: requires Polkit authorization
+    async fn save_custom_profile(
+        &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+        toml_content: String,
+    ) -> fdo::Result<String> {
+        check_polkit_auth(conn, hdr.sender(), "io.github.mzia.PopProfile.set-profile").await?;
+
+        let parsed = crate::config::ProfileConfig::from_toml(&toml_content)
+            .map_err(|e| fdo::Error::InvalidArgs(format!("TOML syntax error: {}", e)))?;
+        let is_system = system::is_privileged();
+        let path = crate::config::save_custom_profile(parsed, is_system)
+            .map_err(|e| fdo::Error::Failed(e))?;
+        Ok(path.to_string_lossy().to_string())
+    }
+
+    /// Deletes a custom profile: requires Polkit authorization
+    async fn delete_custom_profile(
+        &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+        id: String,
+    ) -> fdo::Result<()> {
+        check_polkit_auth(conn, hdr.sender(), "io.github.mzia.PopProfile.set-profile").await?;
+
+        crate::config::delete_custom_profile(&id)
+            .map_err(|e| fdo::Error::Failed(e))
     }
 
     /// Returns the live system status report
