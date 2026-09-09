@@ -41,6 +41,7 @@ sudo pop-profile --home      # Streaming, Proton gaming, phone sync (GSConnect)
 sudo pop-profile --work      # Office & corporate VPN (dev ports blocked to LAN)
 sudo pop-profile --dev       # Coding & debugging (ptrace allowed, 524k file watchers)
 sudo pop-profile --secure    # Coffee shops, airports & public Wi-Fi (stealth mode)
+sudo pop-profile --reset     # Reset all settings back to Pop!_OS factory defaults
 pop-profile --status         # Inspect live posture without sudo
 ```
 
@@ -177,6 +178,9 @@ pop-profile-applet --status
 
 # Quick cycle next profile
 pop-profile-applet --cycle
+
+# Reset all settings to Pop!_OS factory defaults via D-Bus daemon
+pop-profile-applet --reset
 ```
 
 ---
@@ -186,6 +190,7 @@ pop-profile-applet --cycle
 `pop-profile-gui` provides a rich, COSMIC-styled desktop window designed to open as a floating tile (`io.github.mzia.PopProfile.Settings`):
 
 * **Profile Sidebar:** Browse built-in profiles and custom configurations with live active badges.
+* **Factory Defaults Reset**: One-click **`🔄 Reset to Factory Defaults`** with safety confirmation dialog to immediately restore unmanaged out-of-the-box settings (UFW disabled, balanced power profile, battery 100%, and default 15-minute idle delay).
 * **1-Click Import & Export:**
   - **`📥 Import Config`**: Pick any `.pop-profile.toml` file to inspect, validate, and install.
   - **`📤 Export Config`**: Export custom or built-in profiles to share with teammates.
