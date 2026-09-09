@@ -24,18 +24,29 @@ if command -v systemctl >/dev/null 2>&1; then
     systemctl disable pop-profile-daemon 2>/dev/null || true
 fi
 
+if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+    USER_UID=$(id -u "$SUDO_USER" 2>/dev/null || echo "1000")
+    if [ -d "/run/user/$USER_UID" ]; then
+        sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$USER_UID" systemctl --user stop pop-profile-applet.service 2>/dev/null || true
+        sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$USER_UID" systemctl --user disable pop-profile-applet.service 2>/dev/null || true
+    fi
+fi
+
 # Revert system settings to Pop!_OS factory defaults
-if [ -x /usr/local/bin/pop-profile ]; then
+if [ -x /usr/bin/pop-profile ]; then
+    echo "[*] Reverting firewall and sysctl settings to Pop!_OS defaults..."
+    /usr/bin/pop-profile --reset || true
+elif [ -x /usr/local/bin/pop-profile ]; then
     echo "[*] Reverting firewall and sysctl settings to Pop!_OS defaults..."
     /usr/local/bin/pop-profile --reset || true
 fi
 
 # Remove installed files
 echo "[*] Removing installed files..."
-rm -f /usr/local/bin/pop-profile
-rm -f /usr/local/bin/pop-profile-daemon
-rm -f /usr/local/bin/pop-profile-applet
-rm -f /usr/local/bin/cosmic-applet-popprofile
+rm -f /usr/local/bin/pop-profile /usr/bin/pop-profile
+rm -f /usr/local/bin/pop-profile-daemon /usr/bin/pop-profile-daemon
+rm -f /usr/local/bin/pop-profile-applet /usr/bin/pop-profile-applet
+rm -f /usr/local/bin/cosmic-applet-popprofile /usr/bin/cosmic-applet-popprofile
 rm -f /usr/share/applications/io.github.mzia.PopProfile.Applet.desktop
 rm -f /usr/lib/systemd/user/pop-profile-applet.service
 rm -f /usr/share/polkit-1/actions/io.github.mzia.PopProfile.policy

@@ -4,7 +4,7 @@ After=network.target dbus.service
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/pop-profile-daemon --daemon
+ExecStart=/usr/bin/pop-profile-daemon --daemon
 Restart=on-failure
 RestartSec=3
 

@@ -18,21 +18,46 @@ fi
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-echo -e "\n${BOLD}${CYAN}=== Installing pop-profile & Rust D-Bus Daemon ===${NC}"
-
-# 1. Install CLI binary
-echo "[*] Installing CLI to /usr/local/bin/pop-profile..."
-install -m 755 "$SCRIPT_DIR/bin/pop-profile" /usr/local/bin/pop-profile
-
-# 2. Install Rust Daemon & Applet binaries if built
-if [ -f "$SCRIPT_DIR/target/release/pop-profile-daemon" ]; then
-    echo "[*] Installing Rust daemon to /usr/local/bin/pop-profile-daemon..."
-    install -m 755 "$SCRIPT_DIR/target/release/pop-profile-daemon" /usr/local/bin/pop-profile-daemon
+DEV_MODE=0
+if [[ "$1" == "--dev" ]] || [[ "$1" == "-d" ]]; then
+    DEV_MODE=1
+    echo -e "\n${BOLD}${CYAN}=== Installing pop-profile in DEVELOPER MODE ===${NC}"
+    echo -e "${YELLOW}[*] Live workspace symlinks enabled. Recompiling with 'cargo build --release' will immediately reflect system-wide.${NC}"
+else
+    echo -e "\n${BOLD}${CYAN}=== Installing pop-profile & Rust D-Bus Daemon ===${NC}"
 fi
-if [ -f "$SCRIPT_DIR/target/release/pop-profile-applet" ]; then
-    echo "[*] Installing COSMIC Applet to /usr/local/bin/pop-profile-applet..."
-    install -m 755 "$SCRIPT_DIR/target/release/pop-profile-applet" /usr/local/bin/pop-profile-applet
-    ln -sf /usr/local/bin/pop-profile-applet /usr/local/bin/cosmic-applet-popprofile
+
+# 1. Install CLI & Rust Binaries
+if [ "$DEV_MODE" -eq 1 ]; then
+    echo "[*] Linking workspace CLI and binaries to /usr/local/bin and /usr/bin..."
+    ln -sf "$SCRIPT_DIR/bin/pop-profile" /usr/local/bin/pop-profile
+    ln -sf "$SCRIPT_DIR/bin/pop-profile" /usr/bin/pop-profile
+    if [ -f "$SCRIPT_DIR/target/release/pop-profile-daemon" ]; then
+        ln -sf "$SCRIPT_DIR/target/release/pop-profile-daemon" /usr/local/bin/pop-profile-daemon
+        ln -sf "$SCRIPT_DIR/target/release/pop-profile-daemon" /usr/bin/pop-profile-daemon
+    fi
+    if [ -f "$SCRIPT_DIR/target/release/pop-profile-applet" ]; then
+        ln -sf "$SCRIPT_DIR/target/release/pop-profile-applet" /usr/local/bin/pop-profile-applet
+        ln -sf "$SCRIPT_DIR/target/release/pop-profile-applet" /usr/bin/pop-profile-applet
+        ln -sf /usr/bin/pop-profile-applet /usr/bin/cosmic-applet-popprofile
+        ln -sf /usr/local/bin/pop-profile-applet /usr/local/bin/cosmic-applet-popprofile
+    fi
+else
+    echo "[*] Installing CLI to /usr/local/bin/pop-profile and /usr/bin/pop-profile..."
+    install -m 755 "$SCRIPT_DIR/bin/pop-profile" /usr/local/bin/pop-profile
+    ln -sf /usr/local/bin/pop-profile /usr/bin/pop-profile
+    if [ -f "$SCRIPT_DIR/target/release/pop-profile-daemon" ]; then
+        echo "[*] Installing Rust daemon..."
+        install -m 755 "$SCRIPT_DIR/target/release/pop-profile-daemon" /usr/local/bin/pop-profile-daemon
+        ln -sf /usr/local/bin/pop-profile-daemon /usr/bin/pop-profile-daemon
+    fi
+    if [ -f "$SCRIPT_DIR/target/release/pop-profile-applet" ]; then
+        echo "[*] Installing COSMIC Applet..."
+        install -m 755 "$SCRIPT_DIR/target/release/pop-profile-applet" /usr/local/bin/pop-profile-applet
+        ln -sf /usr/local/bin/pop-profile-applet /usr/bin/pop-profile-applet
+        ln -sf /usr/bin/pop-profile-applet /usr/bin/cosmic-applet-popprofile
+        ln -sf /usr/local/bin/pop-profile-applet /usr/local/bin/cosmic-applet-popprofile
+    fi
 fi
 
 # 3. Install COSMIC Desktop Entry & User Service
@@ -73,11 +98,14 @@ if [ -f "$SCRIPT_DIR/data/pop-profile-daemon.service" ]; then
     echo "[*] Installing systemd daemon service..."
     install -m 644 "$SCRIPT_DIR/data/pop-profile-daemon.service" /etc/systemd/system/pop-profile-daemon.service
     if command -v systemctl >/dev/null 2>&1; then
+        echo "[*] Enabling and restarting pop-profile-daemon service..."
         systemctl daemon-reload 2>/dev/null || true
+        systemctl enable pop-profile-daemon.service 2>/dev/null || true
+        systemctl restart pop-profile-daemon.service 2>/dev/null || true
     fi
 fi
 
-# 6. Install Man page
+# 7. Install Man page
 echo "[*] Installing manual page to /usr/local/share/man/man1/pop-profile.1..."
 install -d /usr/local/share/man/man1
 install -m 644 "$SCRIPT_DIR/man/pop-profile.1" /usr/local/share/man/man1/pop-profile.1
@@ -85,7 +113,7 @@ if command -v mandb >/dev/null 2>&1; then
     mandb -q >/dev/null 2>&1 || true
 fi
 
-# 7. Install Completions
+# 8. Install Completions
 if [ -d /etc/bash_completion.d ]; then
     echo "[*] Installing bash completion..."
     install -m 644 "$SCRIPT_DIR/completions/pop-profile.bash" /etc/bash_completion.d/pop-profile
@@ -95,28 +123,56 @@ if [ -d /usr/share/zsh/vendor-completions ]; then
     install -m 644 "$SCRIPT_DIR/completions/pop-profile.zsh" /usr/share/zsh/vendor-completions/_pop-profile
 fi
 
-# 8. Install APT post-upgrade hook for persistence
+# 9. Install APT post-upgrade hook for persistence
 echo "[*] Registering APT post-upgrade maintenance hook..."
 mkdir -p /etc/apt/apt.conf.d/
 cat << 'EOF' > /etc/apt/apt.conf.d/99-popos-profile-health
 // Automatically maintain Pop!_OS security profiles after package updates
-DPkg::Post-Invoke { "if [ -x /usr/local/bin/pop-profile ]; then /usr/local/bin/pop-profile >/dev/null 2>&1 || true; fi"; };
+DPkg::Post-Invoke { "if [ -x /usr/bin/pop-profile ]; then /usr/bin/pop-profile >/dev/null 2>&1 || true; elif [ -x /usr/local/bin/pop-profile ]; then /usr/local/bin/pop-profile >/dev/null 2>&1 || true; fi"; };
 EOF
 chmod 644 /etc/apt/apt.conf.d/99-popos-profile-health
 
-# 9. Run safety verification
+# 10. Configure User Applet Service for active desktop user
+if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+    USER_UID=$(id -u "$SUDO_USER" 2>/dev/null || echo "1000")
+    if [ -d "/run/user/$USER_UID" ]; then
+        echo "[*] Activating COSMIC Applet user service for '$SUDO_USER'..."
+        sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$USER_UID" systemctl --user daemon-reload >/dev/null 2>&1 || true
+        sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$USER_UID" systemctl --user enable --now pop-profile-applet.service >/dev/null 2>&1 || true
+    fi
+fi
+
+# 11. Developer Mode profile activation
+if [ "$DEV_MODE" -eq 1 ]; then
+    echo "[*] Developer Mode: Activating Developer / Coding profile..."
+    if [ -x /usr/bin/pop-profile ]; then
+        /usr/bin/pop-profile --dev || true
+    elif [ -x /usr/local/bin/pop-profile ]; then
+        /usr/local/bin/pop-profile --dev || true
+    fi
+fi
+
+# 12. Run safety verification
 echo "[*] Running verification tests..."
 bash "$SCRIPT_DIR/tests/test_safety.sh"
 
 echo ""
 echo -e "${GREEN}${BOLD}[✔] pop-profile & Rust D-Bus components installed successfully!${NC}"
+if [ "$DEV_MODE" -eq 1 ]; then
+    echo -e "${CYAN}Developer mode is ACTIVE:${NC}"
+    echo "  • Live workspace binaries linked"
+    echo "  • Inotify watches maximized (524,288)"
+    echo "  • Core dumps enabled for debugging"
+    echo "  • Container & dev ports opened"
+    echo "  • COSMIC panel applet running"
+fi
 echo "Usage:"
-echo "  sudo pop-profile --home      # Streaming & Gaming"
-echo "  sudo pop-profile --work      # Office & Corporate VPN"
-echo "  sudo pop-profile --dev       # Coding & Debugging"
-echo "  sudo pop-profile --secure    # Travel & Lockdown"
 echo "  pop-profile --status         # Check active posture"
+echo "  pop-profile --dev            # Switch to Dev profile"
+echo "  pop-profile --work           # Switch to Work profile"
+echo "  pop-profile --home           # Switch to Home profile"
+echo "  pop-profile --secure         # Switch to Secure profile"
 echo ""
-echo "D-Bus Daemon Service:"
-echo "  sudo systemctl start pop-profile-daemon    # Start background D-Bus service"
-echo "  sudo systemctl enable pop-profile-daemon   # Enable on boot for COSMIC Applets"
+echo "Service Status:"
+echo "  systemctl status pop-profile-daemon.service"
+echo "  systemctl --user status pop-profile-applet.service"

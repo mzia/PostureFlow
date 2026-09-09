@@ -1,4 +1,4 @@
-.PHONY: all build install uninstall test deb help
+.PHONY: all build install install-dev uninstall test deb help
 
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
@@ -9,17 +9,21 @@ all: build
 help:
 	@echo "pop-profile Makefile"
 	@echo "Targets:"
-	@echo "  make build      - Compile Rust daemon and COSMIC applet in release mode"
-	@echo "  make install    - Install pop-profile CLI, daemon, COSMIC applet, and services (requires sudo)"
-	@echo "  make uninstall  - Remove installed files and reset defaults (requires sudo)"
-	@echo "  make test       - Run safety, D-Bus daemon, and COSMIC applet test suites"
-	@echo "  make deb        - Build Debian (.deb) package in dist/"
+	@echo "  make build        - Compile Rust daemon and COSMIC applet in release mode"
+	@echo "  make install      - Install pop-profile CLI, daemon, COSMIC applet, and services (requires sudo)"
+	@echo "  make install-dev  - Developer install with live symlinks, daemon service, and Dev profile (requires sudo)"
+	@echo "  make uninstall    - Remove installed files and reset defaults (requires sudo)"
+	@echo "  make test         - Run safety, D-Bus daemon, and COSMIC applet test suites"
+	@echo "  make deb          - Build Debian (.deb) package in dist/"
 
 build:
 	@cargo build --release
 
 install:
 	@sudo ./install.sh
+
+install-dev:
+	@sudo ./install.sh --dev
 
 uninstall:
 	@sudo ./uninstall.sh
