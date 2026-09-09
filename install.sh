@@ -42,6 +42,10 @@ if [ "$DEV_MODE" -eq 1 ]; then
         ln -sf /usr/bin/pop-profile-applet /usr/bin/cosmic-applet-popprofile
         ln -sf /usr/local/bin/pop-profile-applet /usr/local/bin/cosmic-applet-popprofile
     fi
+    if [ -f "$SCRIPT_DIR/target/release/pop-profile-gui" ]; then
+        ln -sf "$SCRIPT_DIR/target/release/pop-profile-gui" /usr/local/bin/pop-profile-gui
+        ln -sf "$SCRIPT_DIR/target/release/pop-profile-gui" /usr/bin/pop-profile-gui
+    fi
 else
     echo "[*] Installing CLI to /usr/local/bin/pop-profile and /usr/bin/pop-profile..."
     install -m 755 "$SCRIPT_DIR/bin/pop-profile" /usr/local/bin/pop-profile
@@ -58,16 +62,29 @@ else
         ln -sf /usr/bin/pop-profile-applet /usr/bin/cosmic-applet-popprofile
         ln -sf /usr/local/bin/pop-profile-applet /usr/local/bin/cosmic-applet-popprofile
     fi
+    if [ -f "$SCRIPT_DIR/target/release/pop-profile-gui" ]; then
+        echo "[*] Installing Pop! Profile GUI..."
+        install -m 755 "$SCRIPT_DIR/target/release/pop-profile-gui" /usr/local/bin/pop-profile-gui
+        ln -sf /usr/local/bin/pop-profile-gui /usr/bin/pop-profile-gui
+    fi
 fi
 
-# 3. Install COSMIC Desktop Entry & User Service
+# 2. Ensure custom profiles directory exists
+mkdir -p /etc/pop-profile/profiles.d
+
+# 3. Install COSMIC Desktop Entries & User Service
 if [ -f "$SCRIPT_DIR/data/io.github.mzia.PopProfile.Applet.desktop" ]; then
     echo "[*] Installing COSMIC Applet desktop entry..."
     install -d /usr/share/applications
     install -m 644 "$SCRIPT_DIR/data/io.github.mzia.PopProfile.Applet.desktop" /usr/share/applications/io.github.mzia.PopProfile.Applet.desktop
-    if command -v update-desktop-database >/dev/null 2>&1; then
-        update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
-    fi
+fi
+if [ -f "$SCRIPT_DIR/data/io.github.mzia.PopProfile.Settings.desktop" ]; then
+    echo "[*] Installing Pop! Profile GUI Settings desktop entry..."
+    install -d /usr/share/applications
+    install -m 644 "$SCRIPT_DIR/data/io.github.mzia.PopProfile.Settings.desktop" /usr/share/applications/io.github.mzia.PopProfile.Settings.desktop
+fi
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
 fi
 if [ -f "$SCRIPT_DIR/data/pop-profile-applet.service" ]; then
     echo "[*] Installing systemd user applet service..."

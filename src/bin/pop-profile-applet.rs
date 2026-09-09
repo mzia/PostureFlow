@@ -214,6 +214,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         }
                     }
 
+                    MenuAction::OpenGui => {
+                        println!("[*] Launching pop-profile-gui...");
+                        let launched = std::process::Command::new("pop-profile-gui").spawn();
+                        if let Err(e) = launched {
+                            eprintln!("[-] Could not launch pop-profile-gui from PATH ({}). Trying exe directory...", e);
+                            if let Ok(exe) = std::env::current_exe() {
+                                if let Some(dir) = exe.parent() {
+                                    let candidate = dir.join("pop-profile-gui");
+                                    if candidate.exists() {
+                                        let _ = std::process::Command::new(candidate).spawn();
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     MenuAction::Quit => {
                         println!("[*] Quit action received. Exiting applet...");
                         break;

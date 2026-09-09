@@ -25,7 +25,7 @@ STAGE_DIR="$REPO_ROOT/target/debian/${PKG_NAME}_${VERSION}_${ARCH}"
 
 # 1. Build Rust release binary if not present
 echo "[*] Ensuring Rust release binary is compiled..."
-if [ ! -f "$REPO_ROOT/target/release/pop-profile-daemon" ]; then
+if [ ! -f "$REPO_ROOT/target/release/pop-profile-daemon" ] || [ ! -f "$REPO_ROOT/target/release/pop-profile-applet" ] || [ ! -f "$REPO_ROOT/target/release/pop-profile-gui" ]; then
     if command -v cargo >/dev/null 2>&1; then
         cargo build --release --manifest-path "$REPO_ROOT/Cargo.toml"
     elif [ -f "$HOME/.cargo/env" ]; then
@@ -51,23 +51,27 @@ mkdir -p "$STAGE_DIR/usr/share/man/man1"
 mkdir -p "$STAGE_DIR/usr/share/bash-completion/completions"
 mkdir -p "$STAGE_DIR/usr/share/zsh/vendor-completions"
 mkdir -p "$STAGE_DIR/etc/apt/apt.conf.d"
+mkdir -p "$STAGE_DIR/etc/pop-profile/profiles.d"
 mkdir -p "$DIST_DIR"
 
 # 3. Copy Binaries
 install -m 755 "$REPO_ROOT/bin/pop-profile" "$STAGE_DIR/usr/bin/pop-profile"
 install -m 755 "$REPO_ROOT/target/release/pop-profile-daemon" "$STAGE_DIR/usr/bin/pop-profile-daemon"
 install -m 755 "$REPO_ROOT/target/release/pop-profile-applet" "$STAGE_DIR/usr/bin/pop-profile-applet"
+install -m 755 "$REPO_ROOT/target/release/pop-profile-gui" "$STAGE_DIR/usr/bin/pop-profile-gui"
 ln -sf pop-profile-applet "$STAGE_DIR/usr/bin/cosmic-applet-popprofile"
 
 if command -v strip >/dev/null 2>&1; then
     strip --strip-unneeded "$STAGE_DIR/usr/bin/pop-profile-daemon"
     strip --strip-unneeded "$STAGE_DIR/usr/bin/pop-profile-applet"
+    strip --strip-unneeded "$STAGE_DIR/usr/bin/pop-profile-gui"
 fi
 
 # 4. Copy Service, Polkit, D-Bus, Desktop Entry
 install -m 644 "$REPO_ROOT/data/pop-profile-daemon.service" "$STAGE_DIR/lib/systemd/system/pop-profile-daemon.service"
 install -m 644 "$REPO_ROOT/data/pop-profile-applet.service" "$STAGE_DIR/usr/lib/systemd/user/pop-profile-applet.service"
 install -m 644 "$REPO_ROOT/data/io.github.mzia.PopProfile.Applet.desktop" "$STAGE_DIR/usr/share/applications/io.github.mzia.PopProfile.Applet.desktop"
+install -m 644 "$REPO_ROOT/data/io.github.mzia.PopProfile.Settings.desktop" "$STAGE_DIR/usr/share/applications/io.github.mzia.PopProfile.Settings.desktop"
 install -m 644 "$REPO_ROOT/data/io.github.mzia.PopProfile.policy" "$STAGE_DIR/usr/share/polkit-1/actions/io.github.mzia.PopProfile.policy"
 install -m 644 "$REPO_ROOT/data/io.github.mzia.PopProfile.conf" "$STAGE_DIR/usr/share/dbus-1/system.d/io.github.mzia.PopProfile.conf"
 

@@ -72,6 +72,10 @@ echo "    -> Initial Icon: $INITIAL_ICON"
 echo "[*] Step 4: Calling GetLayout on /com/canonical/dbusmenu..."
 LAYOUT=$(gdbus call --session --dest "$APPLET_DEST" --object-path /com/canonical/dbusmenu --method com.canonical.dbusmenu.GetLayout 0 10 "[]")
 echo "    -> Layout successfully retrieved ($(echo "$LAYOUT" | wc -c) bytes)"
+if [[ "$LAYOUT" != *"Configure Profiles"* ]]; then
+    echo "[-] Error: Expected 'Configure Profiles' in menu layout"
+    exit 1
+fi
 
 echo "[*] Step 5: Simulating user click on Work Profile (Item ID 11)..."
 gdbus call --session --dest "$APPLET_DEST" --object-path /com/canonical/dbusmenu --method com.canonical.dbusmenu.Event 11 "clicked" "<0>" 0

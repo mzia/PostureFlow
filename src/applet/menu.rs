@@ -10,6 +10,7 @@ pub enum MenuAction {
     SwitchProfile(Profile),
     ShowStatus,
     ResetDefaults,
+    OpenGui,
     Quit,
 }
 
@@ -123,6 +124,13 @@ impl DbusMenu {
                 );
                 Some(props)
             }
+            23 => {
+                props.insert(
+                    "label".to_string(),
+                    Value::from("⚙ Configure Profiles & Import..."),
+                );
+                Some(props)
+            }
             31 => {
                 props.insert("label".to_string(), Value::from("✕ Quit Applet"));
                 Some(props)
@@ -146,7 +154,7 @@ impl DbusMenu {
         };
 
         let root_props = Self::item_props(0, active).unwrap_or_default();
-        let child_ids = [1, 2, 3, 10, 11, 12, 13, 20, 21, 22, 30, 31];
+        let child_ids = [1, 2, 3, 10, 11, 12, 13, 20, 21, 22, 23, 30, 31];
         let mut children = Vec::with_capacity(child_ids.len());
 
         for id in child_ids {
@@ -212,6 +220,7 @@ impl DbusMenu {
                 13 => Some(MenuAction::SwitchProfile(Profile::Secure)),
                 21 => Some(MenuAction::ShowStatus),
                 22 => Some(MenuAction::ResetDefaults),
+                23 => Some(MenuAction::OpenGui),
                 31 => Some(MenuAction::Quit),
                 _ => None,
             };
