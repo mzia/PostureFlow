@@ -123,7 +123,8 @@ Architecture: ${ARCH}
 Maintainer: M. Zia <https://github.com/mzia/pop-profile-manager>
 Depends: ufw (>= 0.36), dbus, polkitd | policykit-1
 Provides: pop-profile (= ${VERSION})
-Replaces: pop-profile (<< ${VERSION})
+Conflicts: pop-profile (<= ${VERSION})
+Replaces: pop-profile (<= ${VERSION})
 Section: utils
 Priority: optional
 Homepage: https://github.com/mzia/pop-profile-manager
