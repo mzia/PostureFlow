@@ -1,14 +1,17 @@
 use std::error::Error;
 use clap::Parser;
-use pop_profile::profile::Profile;
-use pop_profile::dbus::{PopProfileService, DBUS_INTERFACE, DBUS_PATH};
-use pop_profile::system;
+use postureflow::profile::Profile;
+use postureflow::dbus::{
+    PostureFlowService, LegacyPopProfileService,
+    DBUS_INTERFACE, DBUS_PATH, LEGACY_DBUS_INTERFACE, LEGACY_DBUS_PATH,
+};
+use postureflow::system;
 
 #[derive(Parser, Debug)]
-#[command(name = "pop-profile-daemon")]
+#[command(name = "postureflow-daemon")]
 #[command(author = "M. Zia")]
 #[command(version = "1.0.0")]
-#[command(about = "Pop!_OS Context Profile Manager & D-Bus Daemon", long_about = None)]
+#[command(about = "PostureFlow Context Posture Manager & D-Bus Daemon", long_about = None)]
 struct Cli {
     /// Run as a background D-Bus service
     #[arg(long)]
@@ -39,10 +42,10 @@ struct Cli {
     secure: bool,
 
     /// Activate a specific profile by ID (built-in or custom)
-    #[arg(long, short = 'p')]
+    #[arg(long, short)]
     profile: Option<String>,
 
-    /// Display current context posture and open ports
+    /// Show current security posture report
     #[arg(long, short = 'i')]
     status: bool,
 
@@ -100,35 +103,40 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Default: print status
     println!("{}", system::get_status_report());
-    println!("\nUsage: pop-profile-daemon [--home | --work | --dev | --travel | --daemon | --status]");
+    println!("\nUsage: postureflow-daemon [--home | --work | --dev | --travel | --daemon | --status]");
     Ok(())
 }
 
 async fn run_daemon(session_bus: bool) -> Result<(), Box<dyn Error>> {
-    println!("[*] Starting pop-profile-daemon (v1.0.0)...");
-    let service = PopProfileService::new();
+    println!("[*] Starting postureflow-daemon (v1.0.0)...");
+    let service = PostureFlowService::new();
+    let legacy_service = LegacyPopProfileService(service.clone());
 
     let connection = if session_bus {
         println!("[*] Connecting to D-Bus Session Bus (Test mode)...");
         zbus::connection::Builder::session()?
             .name(DBUS_INTERFACE)?
+            .name(LEGACY_DBUS_INTERFACE)?
             .serve_at(DBUS_PATH, service)?
+            .serve_at(LEGACY_DBUS_PATH, legacy_service)?
             .build()
             .await?
     } else {
         println!("[*] Connecting to D-Bus System Bus...");
         zbus::connection::Builder::system()?
             .name(DBUS_INTERFACE)?
+            .name(LEGACY_DBUS_INTERFACE)?
             .serve_at(DBUS_PATH, service)?
+            .serve_at(LEGACY_DBUS_PATH, legacy_service)?
             .build()
             .await?
     };
 
-    println!("[+] D-Bus Service registered at {} on path {}", DBUS_INTERFACE, DBUS_PATH);
+    println!("[+] D-Bus Service registered at {} and {} (compat)", DBUS_INTERFACE, LEGACY_DBUS_INTERFACE);
     println!("[+] Daemon ready and listening for COSMIC Applet requests. Press Ctrl+C to stop.");
 
     tokio::signal::ctrl_c().await?;
-    println!("\n[*] Shutting down pop-profile-daemon...");
+    println!("\n[*] Shutting down postureflow-daemon...");
     drop(connection);
     Ok(())
 }

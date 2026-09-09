@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Debian Package Builder for pop-profile (Phase 2)
+# Debian Package Builder for PostureFlow
 # ==============================================================================
 
 set -eo pipefail
@@ -12,20 +12,20 @@ RED="\033[0;31m"
 CYAN="\033[0;36m"
 NC="\033[0m"
 
-echo -e "\n${BOLD}${CYAN}=== Building Debian Package for pop-profile ===${NC}"
+echo -e "\n${BOLD}${CYAN}=== Building Debian Package for PostureFlow ===${NC}"
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 
 VERSION="1.0.0"
 ARCH="amd64"
-PKG_NAME="pop-profile"
+PKG_NAME="postureflow"
 DIST_DIR="$REPO_ROOT/dist"
 STAGE_DIR="$REPO_ROOT/target/debian/${PKG_NAME}_${VERSION}_${ARCH}"
 
 # 1. Build Rust release binary if not present
-echo "[*] Ensuring Rust release binary is compiled..."
-if [ ! -f "$REPO_ROOT/target/release/pop-profile-daemon" ] || [ ! -f "$REPO_ROOT/target/release/pop-profile-applet" ] || [ ! -f "$REPO_ROOT/target/release/pop-profile-gui" ]; then
+echo "[*] Ensuring Rust release binaries are compiled..."
+if [ ! -f "$REPO_ROOT/target/release/postureflow-daemon" ] || [ ! -f "$REPO_ROOT/target/release/postureflow-applet" ] || [ ! -f "$REPO_ROOT/target/release/postureflow-gui" ]; then
     if command -v cargo >/dev/null 2>&1; then
         cargo build --release --manifest-path "$REPO_ROOT/Cargo.toml"
     elif [ -f "$HOME/.cargo/env" ]; then
@@ -45,50 +45,75 @@ mkdir -p "$STAGE_DIR/usr/bin"
 mkdir -p "$STAGE_DIR/lib/systemd/system"
 mkdir -p "$STAGE_DIR/usr/lib/systemd/user"
 mkdir -p "$STAGE_DIR/usr/share/applications"
+mkdir -p "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps"
 mkdir -p "$STAGE_DIR/usr/share/polkit-1/actions"
 mkdir -p "$STAGE_DIR/usr/share/dbus-1/system.d"
 mkdir -p "$STAGE_DIR/usr/share/man/man1"
 mkdir -p "$STAGE_DIR/usr/share/bash-completion/completions"
 mkdir -p "$STAGE_DIR/usr/share/zsh/vendor-completions"
 mkdir -p "$STAGE_DIR/etc/apt/apt.conf.d"
+mkdir -p "$STAGE_DIR/etc/postureflow/profiles.d"
 mkdir -p "$STAGE_DIR/etc/pop-profile/profiles.d"
 mkdir -p "$DIST_DIR"
 
-# 3. Copy Binaries
-install -m 755 "$REPO_ROOT/bin/pop-profile" "$STAGE_DIR/usr/bin/pop-profile"
-install -m 755 "$REPO_ROOT/target/release/pop-profile-daemon" "$STAGE_DIR/usr/bin/pop-profile-daemon"
-install -m 755 "$REPO_ROOT/target/release/pop-profile-applet" "$STAGE_DIR/usr/bin/pop-profile-applet"
-install -m 755 "$REPO_ROOT/target/release/pop-profile-gui" "$STAGE_DIR/usr/bin/pop-profile-gui"
-ln -sf pop-profile-applet "$STAGE_DIR/usr/bin/cosmic-applet-popprofile"
+# 3. Copy Binaries & Compatibility Symlinks
+install -m 755 "$REPO_ROOT/bin/postureflow" "$STAGE_DIR/usr/bin/postureflow"
+ln -sf postureflow "$STAGE_DIR/usr/bin/pop-profile"
+
+install -m 755 "$REPO_ROOT/target/release/postureflow-daemon" "$STAGE_DIR/usr/bin/postureflow-daemon"
+ln -sf postureflow-daemon "$STAGE_DIR/usr/bin/pop-profile-daemon"
+
+install -m 755 "$REPO_ROOT/target/release/postureflow-applet" "$STAGE_DIR/usr/bin/postureflow-applet"
+ln -sf postureflow-applet "$STAGE_DIR/usr/bin/pop-profile-applet"
+ln -sf postureflow-applet "$STAGE_DIR/usr/bin/cosmic-applet-postureflow"
+ln -sf postureflow-applet "$STAGE_DIR/usr/bin/cosmic-applet-popprofile"
+
+install -m 755 "$REPO_ROOT/target/release/postureflow-gui" "$STAGE_DIR/usr/bin/postureflow-gui"
+ln -sf postureflow-gui "$STAGE_DIR/usr/bin/pop-profile-gui"
 
 if command -v strip >/dev/null 2>&1; then
-    strip --strip-unneeded "$STAGE_DIR/usr/bin/pop-profile-daemon"
-    strip --strip-unneeded "$STAGE_DIR/usr/bin/pop-profile-applet"
-    strip --strip-unneeded "$STAGE_DIR/usr/bin/pop-profile-gui"
+    strip --strip-unneeded "$STAGE_DIR/usr/bin/postureflow-daemon"
+    strip --strip-unneeded "$STAGE_DIR/usr/bin/postureflow-applet"
+    strip --strip-unneeded "$STAGE_DIR/usr/bin/postureflow-gui"
 fi
 
 # 4. Copy Service, Polkit, D-Bus, Desktop Entry
-install -m 644 "$REPO_ROOT/data/pop-profile-daemon.service" "$STAGE_DIR/lib/systemd/system/pop-profile-daemon.service"
-install -m 644 "$REPO_ROOT/data/pop-profile-applet.service" "$STAGE_DIR/usr/lib/systemd/user/pop-profile-applet.service"
-install -m 644 "$REPO_ROOT/data/io.github.mzia.PopProfile.Applet.desktop" "$STAGE_DIR/usr/share/applications/io.github.mzia.PopProfile.Applet.desktop"
+install -m 644 "$REPO_ROOT/data/postureflow-daemon.service" "$STAGE_DIR/lib/systemd/system/postureflow-daemon.service"
+ln -sf postureflow-daemon.service "$STAGE_DIR/lib/systemd/system/pop-profile-daemon.service"
+
+install -m 644 "$REPO_ROOT/data/postureflow-applet.service" "$STAGE_DIR/usr/lib/systemd/user/postureflow-applet.service"
+ln -sf postureflow-applet.service "$STAGE_DIR/usr/lib/systemd/user/pop-profile-applet.service"
+
+install -m 644 "$REPO_ROOT/data/io.github.mzia.PostureFlow.desktop" "$STAGE_DIR/usr/share/applications/io.github.mzia.PostureFlow.desktop"
+install -m 644 "$REPO_ROOT/data/io.github.mzia.PostureFlow.Applet.desktop" "$STAGE_DIR/usr/share/applications/io.github.mzia.PostureFlow.Applet.desktop"
 install -m 644 "$REPO_ROOT/data/io.github.mzia.PopProfile.Settings.desktop" "$STAGE_DIR/usr/share/applications/io.github.mzia.PopProfile.Settings.desktop"
-install -m 644 "$REPO_ROOT/data/io.github.mzia.PopProfile.policy" "$STAGE_DIR/usr/share/polkit-1/actions/io.github.mzia.PopProfile.policy"
+install -m 644 "$REPO_ROOT/data/io.github.mzia.PopProfile.Applet.desktop" "$STAGE_DIR/usr/share/applications/io.github.mzia.PopProfile.Applet.desktop"
+
+install -m 644 "$REPO_ROOT/data/icons/io.github.mzia.PostureFlow.svg" "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps/io.github.mzia.PostureFlow.svg"
+install -m 644 "$REPO_ROOT/data/icons/io.github.mzia.PostureFlow.svg" "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps/io.github.mzia.PopProfile.svg"
+
+install -m 644 "$REPO_ROOT/data/io.github.mzia.PostureFlow.policy" "$STAGE_DIR/usr/share/polkit-1/actions/io.github.mzia.PostureFlow.policy"
+install -m 644 "$REPO_ROOT/data/io.github.mzia.PostureFlow.conf" "$STAGE_DIR/usr/share/dbus-1/system.d/io.github.mzia.PostureFlow.conf"
 install -m 644 "$REPO_ROOT/data/io.github.mzia.PopProfile.conf" "$STAGE_DIR/usr/share/dbus-1/system.d/io.github.mzia.PopProfile.conf"
 
 # 5. Copy Man Page (gzipped)
-gzip -c -9 "$REPO_ROOT/man/pop-profile.1" > "$STAGE_DIR/usr/share/man/man1/pop-profile.1.gz"
-chmod 644 "$STAGE_DIR/usr/share/man/man1/pop-profile.1.gz"
+gzip -c -9 "$REPO_ROOT/man/postureflow.1" > "$STAGE_DIR/usr/share/man/man1/postureflow.1.gz"
+chmod 644 "$STAGE_DIR/usr/share/man/man1/postureflow.1.gz"
+ln -sf postureflow.1.gz "$STAGE_DIR/usr/share/man/man1/pop-profile.1.gz"
 
 # 6. Copy Completions
-install -m 644 "$REPO_ROOT/completions/pop-profile.bash" "$STAGE_DIR/usr/share/bash-completion/completions/pop-profile"
-install -m 644 "$REPO_ROOT/completions/pop-profile.zsh" "$STAGE_DIR/usr/share/zsh/vendor-completions/_pop-profile"
+install -m 644 "$REPO_ROOT/completions/postureflow.bash" "$STAGE_DIR/usr/share/bash-completion/completions/postureflow"
+ln -sf postureflow "$STAGE_DIR/usr/share/bash-completion/completions/pop-profile"
+
+install -m 644 "$REPO_ROOT/completions/postureflow.zsh" "$STAGE_DIR/usr/share/zsh/vendor-completions/_postureflow"
+ln -sf _postureflow "$STAGE_DIR/usr/share/zsh/vendor-completions/_pop-profile"
 
 # 7. Copy APT Post-Upgrade Hook
-cat << 'EOF' > "$STAGE_DIR/etc/apt/apt.conf.d/99-popos-profile-health"
-// Automatically maintain Pop!_OS security profiles after package updates
-DPkg::Post-Invoke { "if [ -x /usr/bin/pop-profile ]; then /usr/bin/pop-profile >/dev/null 2>&1 || true; fi"; };
+cat << 'EOF' > "$STAGE_DIR/etc/apt/apt.conf.d/99-postureflow-health"
+// Automatically maintain PostureFlow security & power profiles after package updates
+DPkg::Post-Invoke { "if [ -x /usr/bin/postureflow ]; then /usr/bin/postureflow >/dev/null 2>&1 || true; elif [ -x /usr/bin/pop-profile ]; then /usr/bin/pop-profile >/dev/null 2>&1 || true; fi"; };
 EOF
-chmod 644 "$STAGE_DIR/etc/apt/apt.conf.d/99-popos-profile-health"
+chmod 644 "$STAGE_DIR/etc/apt/apt.conf.d/99-postureflow-health"
 
 # 8. Create DEBIAN/control
 cat << EOF > "$STAGE_DIR/DEBIAN/control"
@@ -97,13 +122,16 @@ Version: ${VERSION}
 Architecture: ${ARCH}
 Maintainer: M. Zia <https://github.com/mzia/pop-profile-manager>
 Depends: ufw (>= 0.36), dbus, polkitd | policykit-1
+Provides: pop-profile (= ${VERSION})
+Replaces: pop-profile (<< ${VERSION})
 Section: utils
 Priority: optional
 Homepage: https://github.com/mzia/pop-profile-manager
-Description: Context-aware security, developer, and lifestyle profile manager
- pop-profile dynamically bridges the gap between paranoid security,
- frictionless software engineering, and casual entertainment on Pop!_OS
- and Ubuntu laptops. Includes a native Rust D-Bus daemon and Polkit policy.
+Description: Dynamic security posture, hardware power, and lifestyle workflow orchestrator
+ PostureFlow (formerly pop-profile) dynamically bridges the gap between
+ paranoid security, frictionless software engineering, and casual
+ entertainment on Linux and Pop!_OS laptops. Includes a native Rust D-Bus
+ daemon, status bar applet, GUI settings, and Polkit policy.
 EOF
 chmod 644 "$STAGE_DIR/DEBIAN/control"
 
@@ -118,16 +146,19 @@ case "$1" in
         if [ -d /run/systemd/system ]; then
             systemctl --system daemon-reload >/dev/null 2>&1 || true
             systemctl reload dbus >/dev/null 2>&1 || true
-            systemctl enable pop-profile-daemon.service >/dev/null 2>&1 || true
-            systemctl restart pop-profile-daemon.service >/dev/null 2>&1 || true
+            systemctl enable postureflow-daemon.service >/dev/null 2>&1 || true
+            systemctl restart postureflow-daemon.service >/dev/null 2>&1 || true
         fi
 
-        # Update man and desktop databases
+        # Update man, desktop, and icon databases
         if which mandb >/dev/null 2>&1; then
             mandb -q >/dev/null 2>&1 || true
         fi
         if which update-desktop-database >/dev/null 2>&1; then
             update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
+        fi
+        if which gtk-update-icon-cache >/dev/null 2>&1; then
+            gtk-update-icon-cache -q /usr/share/icons/hicolor >/dev/null 2>&1 || true
         fi
         ;;
 esac
@@ -143,8 +174,9 @@ set -e
 case "$1" in
     remove|deconfigure)
         if [ -d /run/systemd/system ]; then
+            systemctl stop postureflow-daemon.service >/dev/null 2>&1 || true
+            systemctl disable postureflow-daemon.service >/dev/null 2>&1 || true
             systemctl stop pop-profile-daemon.service >/dev/null 2>&1 || true
-            systemctl disable pop-profile-daemon.service >/dev/null 2>&1 || true
         fi
         ;;
 esac
@@ -164,14 +196,20 @@ case "$1" in
             ufw --force disable >/dev/null 2>&1 || true
             ufw --force reset >/dev/null 2>&1 || true
         fi
+        rm -f /etc/postureflow-state
         rm -f /etc/popos-security-profile
+        rm -f /etc/sysctl.d/99-postureflow.conf
         rm -f /etc/sysctl.d/99-popos-security.conf
+        rm -f /etc/security/limits.d/99-postureflow.conf
         rm -f /etc/security/limits.d/99-popos-security.conf
         if which sysctl >/dev/null 2>&1; then
             sysctl --system >/dev/null 2>&1 || true
         fi
         if which update-desktop-database >/dev/null 2>&1; then
             update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
+        fi
+        if which gtk-update-icon-cache >/dev/null 2>&1; then
+            gtk-update-icon-cache -q /usr/share/icons/hicolor >/dev/null 2>&1 || true
         fi
         ;;
     remove)
@@ -180,6 +218,9 @@ case "$1" in
         fi
         if which update-desktop-database >/dev/null 2>&1; then
             update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
+        fi
+        if which gtk-update-icon-cache >/dev/null 2>&1; then
+            gtk-update-icon-cache -q /usr/share/icons/hicolor >/dev/null 2>&1 || true
         fi
         ;;
 esac

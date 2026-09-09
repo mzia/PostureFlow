@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=PostureFlow
+GenericName=Security & Power Posture Manager
+Comment=Configure, test, and switch security, developer, and power profiles for Linux & COSMIC desktops
+Exec=postureflow-gui
+Icon=io.github.mzia.PostureFlow
+Terminal=false
+Type=Application
+Categories=Settings;HardwareSettings;Security;
+StartupNotify=true
+StartupWMClass=io.github.mzia.PostureFlow
+Keywords=profile;security;ufw;firewall;power;framework;battery;sysctl;cosmic;travel;posture;flow;

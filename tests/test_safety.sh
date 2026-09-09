@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# pop-profile Automated Anti-Lockout Test Suite
+# PostureFlow Automated Anti-Lockout Test Suite
 # ==============================================================================
 
 set -eo pipefail
@@ -12,7 +12,7 @@ RED="\033[0;31m"
 CYAN="\033[0;36m"
 NC="\033[0m"
 
-echo -e "\n${BOLD}${CYAN}=== Running pop-profile Anti-Lockout Tests ===${NC}"
+echo -e "\n${BOLD}${CYAN}=== Running PostureFlow Anti-Lockout Tests ===${NC}"
 passed=0
 total=0
 
@@ -97,7 +97,11 @@ fi
 total=$((total + 1))
 echo -n "  [TEST 6] Checking eBPF configuration safety... "
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-BIN_FILE="$SCRIPT_DIR/../bin/pop-profile"
+BIN_FILE="$SCRIPT_DIR/../bin/postureflow"
+if [ ! -f "$BIN_FILE" ]; then
+    BIN_FILE="$SCRIPT_DIR/../bin/pop-profile"
+fi
+
 if ! grep -q -E "^kernel\.unprivileged_bpf_disabled\s*=\s*1" "$BIN_FILE"; then
     echo -e "${GREEN}PASSED${NC} (Uses admin-managed value 2, avoiding irreversible lock)"
     passed=$((passed + 1))
@@ -118,7 +122,7 @@ fi
 # Test 8: Man Page Documentation Availability
 total=$((total + 1))
 echo -n "  [TEST 8] Verifying documentation & man page presence... "
-if [ -f "$SCRIPT_DIR/../man/pop-profile.1" ] || [ -f "$SCRIPT_DIR/../README.md" ]; then
+if [ -f "$SCRIPT_DIR/../man/postureflow.1" ] || [ -f "$SCRIPT_DIR/../man/pop-profile.1" ] || [ -f "$SCRIPT_DIR/../README.md" ]; then
     echo -e "${GREEN}PASSED${NC}"
     passed=$((passed + 1))
 else
@@ -127,7 +131,7 @@ fi
 
 echo ""
 if [ "$passed" -eq "$total" ]; then
-    echo -e "${GREEN}${BOLD}[✔] All $passed/$total safety tests passed! pop-profile cannot lock you out.${NC}"
+    echo -e "${GREEN}${BOLD}[✔] All $passed/$total safety tests passed! PostureFlow cannot lock you out.${NC}"
     exit 0
 else
     echo -e "${YELLOW}[!] $passed/$total tests passed.${NC}"

@@ -1,27 +1,27 @@
 [package]
-name = "pop-profile"
+name = "postureflow"
 version = "1.0.0"
 edition = "2021"
 authors = ["M. Zia"]
-description = "Context-aware security, developer, and lifestyle profile manager for Pop!_OS"
+description = "PostureFlow: Context-aware security, developer, and lifestyle posture manager"
 license = "MIT"
 repository = "https://github.com/mzia/pop-profile-manager"
 
 [lib]
-name = "pop_profile"
+name = "postureflow"
 path = "src/lib.rs"
 
 [[bin]]
-name = "pop-profile-daemon"
+name = "postureflow-daemon"
 path = "src/main.rs"
 
 [[bin]]
-name = "pop-profile-applet"
-path = "src/bin/pop-profile-applet.rs"
+name = "postureflow-applet"
+path = "src/bin/postureflow-applet.rs"
 
 [[bin]]
-name = "pop-profile-gui"
-path = "src/bin/pop-profile-gui.rs"
+name = "postureflow-gui"
+path = "src/bin/postureflow-gui.rs"
 
 [dependencies]
 zbus = { version = "4", default-features = false, features = ["tokio"] }

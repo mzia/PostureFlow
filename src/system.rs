@@ -2,27 +2,36 @@ use std::fs;
 use std::process::Command;
 use crate::profile::Profile;
 
-pub const STATE_FILE: &str = "/etc/popos-security-profile";
-pub const SYSCTL_CONF: &str = "/etc/sysctl.d/99-popos-security.conf";
-pub const LIMITS_CONF: &str = "/etc/security/limits.d/99-popos-security.conf";
+pub const STATE_FILE: &str = "/etc/postureflow-state";
+pub const LEGACY_STATE_FILE: &str = "/etc/popos-security-profile";
+pub const SYSCTL_CONF: &str = "/etc/sysctl.d/99-postureflow.conf";
+pub const LEGACY_SYSCTL_CONF: &str = "/etc/sysctl.d/99-popos-security.conf";
+pub const LIMITS_CONF: &str = "/etc/security/limits.d/99-postureflow.conf";
+pub const LEGACY_LIMITS_CONF: &str = "/etc/security/limits.d/99-popos-security.conf";
 
 pub fn is_privileged() -> bool {
     unsafe { libc::geteuid() == 0 }
 }
 
 pub fn state_file_path() -> String {
+    if let Ok(path) = std::env::var("POSTUREFLOW_STATE_FILE") {
+        return path;
+    }
     if let Ok(path) = std::env::var("POP_PROFILE_STATE_FILE") {
         return path;
     }
     if is_privileged() {
+        if !std::path::Path::new(STATE_FILE).exists() && std::path::Path::new(LEGACY_STATE_FILE).exists() {
+            return LEGACY_STATE_FILE.to_string();
+        }
         STATE_FILE.to_string()
     } else {
         if let Ok(dir) = std::env::var("XDG_RUNTIME_DIR") {
             if std::path::Path::new(&dir).is_dir() {
-                return format!("{}/popos-security-profile", dir);
+                return format!("{}/postureflow-state", dir);
             }
         }
-        "/tmp/popos-security-profile".to_string()
+        "/tmp/postureflow-state".to_string()
     }
 }
 
@@ -236,8 +245,12 @@ pub fn reset_to_defaults() -> Result<(), String> {
     let _ = execute("ufw", &["--force", "disable"]);
     let _ = execute("ufw", &["--force", "reset"]);
 
+    let _ = fs::remove_file(STATE_FILE);
+    let _ = fs::remove_file(LEGACY_STATE_FILE);
     let _ = fs::remove_file(SYSCTL_CONF);
+    let _ = fs::remove_file(LEGACY_SYSCTL_CONF);
     let _ = fs::remove_file(LIMITS_CONF);
+    let _ = fs::remove_file(LEGACY_LIMITS_CONF);
 
     let _ = execute("sysctl", &["--system"]);
 

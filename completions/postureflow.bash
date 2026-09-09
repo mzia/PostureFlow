@@ -1,4 +1,4 @@
-# pop-profile bash completion (compatibility wrapper)
+# PostureFlow bash completion
 _postureflow_completions() {
     local cur prev opts
     COMPREPLY=()

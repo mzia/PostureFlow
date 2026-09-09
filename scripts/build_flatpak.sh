@@ -12,14 +12,14 @@ RED="\033[0;31m"
 CYAN="\033[0;36m"
 NC="\033[0m"
 
-echo -e "\n${BOLD}${CYAN}=== Pop! Profile Manager Flatpak Builder ===${NC}"
+echo -e "\n${BOLD}${CYAN}=== PostureFlow Flatpak Builder ===${NC}"
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 cd "$REPO_ROOT"
 
-APP_ID="io.github.mzia.PopProfile"
-MANIFEST="io.github.mzia.PopProfile.yml"
+APP_ID="io.github.mzia.PostureFlow"
+MANIFEST="io.github.mzia.PostureFlow.yml"
 BUILD_DIR="$REPO_ROOT/target/flatpak-build"
 REPO_DIR="$REPO_ROOT/target/flatpak-repo"
 DIST_DIR="$REPO_ROOT/dist"

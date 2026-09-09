@@ -24,6 +24,7 @@ jobs:
 
       - name: Verify Shellcheck syntax
         run: |
+          bash -n bin/postureflow
           bash -n bin/pop-profile
           bash -n install.sh
           bash -n uninstall.sh
@@ -53,4 +54,4 @@ jobs:
 
       - name: Verify Man Page
         run: |
-          man -l man/pop-profile.1 > /dev/null
+          man -l man/postureflow.1 > /dev/null

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.mzia.PostureFlow</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>PostureFlow</name>
+  <summary>Context-aware security, developer, and lifestyle posture manager</summary>
+  
+  <developer id="io.github.mzia">
+    <name>M. Zia</name>
+  </developer>
+
+  <description>
+    <p>
+      PostureFlow dynamically bridges the gap between paranoid security, frictionless
+      software engineering, and casual entertainment on Pop!_OS and Ubuntu laptops.
+    </p>
+    <p>Features include:</p>
+    <ul>
+      <li>Four distinct operational contexts: Home (gaming, streaming, device sync), Work (corporate VPN, printer discovery, office LAN lockdown), Dev (debuggers attach, 524k file watchers, dev ports open), and Travel (hardened public Wi-Fi lockdown).</li>
+      <li>Declarative TOML profile engine with 1-click import and export capabilities.</li>
+      <li>Framework Laptop power controls: configurable battery charge thresholds, energy profiles, and display idle locks.</li>
+      <li>Factory Defaults Reset: Instant one-click restoration to official out-of-the-box Pop!_OS settings.</li>
+      <li>Anti-Lockout Safety Engine: Strict loopback IPC guarantees, SSH auto-preservation, and eBPF/sysctl validation.</li>
+      <li>Seamless D-Bus system bus and Polkit cached admin authorization integration.</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">io.github.mzia.PostureFlow.desktop</launchable>
+  <url type="homepage">https://github.com/mzia/pop-profile-manager</url>
+  <url type="bugtracker">https://github.com/mzia/pop-profile-manager/issues</url>
+  <url type="vcs-browser">https://github.com/mzia/pop-profile-manager</url>
+
+  <provides>
+    <binary>postureflow-gui</binary>
+    <binary>postureflow-applet</binary>
+    <binary>postureflow</binary>
+  </provides>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>PostureFlow floating settings and custom profile editor</caption>
+      <image>https://raw.githubusercontent.com/mzia/pop-profile-manager/main/assets/screenshot-gui.png</image>
+    </screenshot>
+  </screenshots>
+
+  <releases>
+    <release version="1.0.0" date="2026-09-09">
+      <description>
+        <p>Initial stable release of PostureFlow featuring native COSMIC panel applet, floating desktop GUI, declarative custom profile engine, and factory reset option.</p>
+      </description>
+    </release>
+  </releases>
+
+  <content_rating type="oars-1.1" />
+</component>

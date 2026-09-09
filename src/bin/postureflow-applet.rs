@@ -7,17 +7,17 @@ use tokio::sync::{mpsc, RwLock};
 use zbus::Connection;
 use zbus::fdo::DBusProxy;
 
-use pop_profile::applet::{
+use postureflow::applet::{
     AppState, DaemonClient, DbusMenu, MenuAction, StatusNotifierItem,
     MENU_OBJECT_PATH, SNI_OBJECT_PATH, WATCHER_BUS_NAME, WATCHER_OBJECT_PATH,
 };
-use pop_profile::profile::Profile;
+use postureflow::profile::Profile;
 
 #[derive(Parser, Debug)]
-#[command(name = "pop-profile-applet")]
+#[command(name = "postureflow-applet")]
 #[command(author = "M. Zia")]
 #[command(version = "1.0.0")]
-#[command(about = "COSMIC Panel Applet & System Tray for Pop! Profile Manager", long_about = None)]
+#[command(about = "COSMIC Panel Applet & System Tray for PostureFlow", long_about = None)]
 struct Cli {
     /// Connect to Session Bus instead of System Bus for daemon communication (test mode)
     #[arg(long)]
@@ -40,7 +40,7 @@ struct Cli {
 async fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
 
-    println!("[*] Initializing Pop! Profile Applet (v1.0.0)...");
+    println!("[*] Initializing PostureFlow Applet (v1.0.0)...");
     let daemon = DaemonClient::connect(cli.session_bus).await?;
 
     if cli.reset {
@@ -220,7 +220,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 }
                                 emit_profile_updated(&session_conn, &state).await;
                                 daemon.send_notification(
-                                    "Pop! Profile Manager",
+                                    "PostureFlow",
                                     "Firewall and system power settings restored to factory defaults.",
                                     "security-medium-symbolic",
                                 ).await;
@@ -233,13 +233,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     }
 
                     MenuAction::OpenGui => {
-                        println!("[*] Launching pop-profile-gui...");
-                        let launched = std::process::Command::new("pop-profile-gui").spawn();
+                        println!("[*] Launching postureflow-gui...");
+                        let mut launched = std::process::Command::new("postureflow-gui").spawn();
+                        if launched.is_err() {
+                            launched = std::process::Command::new("pop-profile-gui").spawn();
+                        }
                         if let Err(e) = launched {
-                            eprintln!("[-] Could not launch pop-profile-gui from PATH ({}). Trying exe directory...", e);
+                            eprintln!("[-] Could not launch postureflow-gui from PATH ({}). Trying exe directory...", e);
                             if let Ok(exe) = std::env::current_exe() {
                                 if let Some(dir) = exe.parent() {
-                                    let candidate = dir.join("pop-profile-gui");
+                                    let mut candidate = dir.join("postureflow-gui");
+                                    if !candidate.exists() {
+                                        candidate = dir.join("pop-profile-gui");
+                                    }
                                     if candidate.exists() {
                                         let _ = std::process::Command::new(candidate).spawn();
                                     }
@@ -256,7 +262,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
 
             _ = tokio::signal::ctrl_c() => {
-                println!("\n[*] Shutting down Pop! Profile Applet...");
+                println!("\n[*] Shutting down PostureFlow Applet...");
                 break;
             }
         }

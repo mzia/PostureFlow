@@ -22,11 +22,11 @@ jobs:
 
       - name: Validate AppStream Metainfo
         run: |
-          appstreamcli validate --no-net data/io.github.mzia.PopProfile.metainfo.xml
+          appstreamcli validate --no-net data/io.github.mzia.PostureFlow.metainfo.xml
 
       - name: Validate Desktop File
         run: |
-          desktop-file-validate data/io.github.mzia.PopProfile.desktop
+          desktop-file-validate data/io.github.mzia.PostureFlow.desktop
 
       - name: Generate Cargo Sources
         run: |
@@ -48,13 +48,13 @@ jobs:
       - name: Setup Flatpak Builder
         uses: flatpak/flatpak-builder-action@v1
         with:
-          bundle: io.github.mzia.PopProfile.flatpak
-          manifest-path: io.github.mzia.PopProfile.yml
+          bundle: io.github.mzia.PostureFlow.flatpak
+          manifest-path: io.github.mzia.PostureFlow.yml
           run-tests: false
           branch: stable
 
       - name: Upload Flatpak Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PopProfile-flatpak
-          path: io.github.mzia.PopProfile.flatpak
+          name: PostureFlow-flatpak
+          path: io.github.mzia.PostureFlow.flatpak

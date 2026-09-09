@@ -7,10 +7,10 @@ MANDIR ?= $(PREFIX)/share/man/man1
 all: build
 
 help:
-	@echo "pop-profile Makefile"
+	@echo "PostureFlow Makefile"
 	@echo "Targets:"
 	@echo "  make build           - Compile Rust daemon, GUI, and applet in release mode"
-	@echo "  make install         - Install pop-profile CLI, daemon, GUI, applet, and services (requires sudo)"
+	@echo "  make install         - Install PostureFlow CLI, daemon, GUI, applet, and services (requires sudo)"
 	@echo "  make install-dev     - Developer install with live symlinks, daemon service, and Dev profile (requires sudo)"
 	@echo "  make reset           - Reset system to Pop!_OS factory defaults (requires sudo)"
 	@echo "  make uninstall       - Remove installed files and reset defaults (requires sudo)"
@@ -29,7 +29,7 @@ install-dev:
 	@sudo ./install.sh --dev
 
 reset:
-	@sudo ./bin/pop-profile --reset
+	@sudo ./bin/postureflow --reset
 
 uninstall:
 	@sudo ./uninstall.sh
@@ -47,4 +47,3 @@ flatpak-sources:
 
 flatpak: flatpak-sources
 	@./scripts/build_flatpak.sh
-

@@ -1,0 +1,13 @@
+[Unit]
+Description=PostureFlow COSMIC Panel Applet
+PartOf=graphical-session.target
+After=graphical-session.target postureflow-daemon.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/postureflow-applet
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

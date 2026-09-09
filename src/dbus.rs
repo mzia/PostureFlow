@@ -3,15 +3,19 @@ use tokio::sync::Mutex;
 use zbus::{interface, fdo};
 use crate::system;
 
-pub const DBUS_INTERFACE: &str = "io.github.mzia.PopProfile";
-pub const DBUS_PATH: &str = "/io/github/mzia/PopProfile";
+pub const DBUS_INTERFACE: &str = "io.github.mzia.PostureFlow";
+pub const DBUS_PATH: &str = "/io/github/mzia/PostureFlow";
+pub const LEGACY_DBUS_INTERFACE: &str = "io.github.mzia.PopProfile";
+pub const LEGACY_DBUS_PATH: &str = "/io/github/mzia/PopProfile";
 
 #[derive(Clone)]
-pub struct PopProfileService {
+pub struct PostureFlowService {
     active_profile: Arc<Mutex<String>>,
 }
 
-impl PopProfileService {
+pub type PopProfileService = PostureFlowService;
+
+impl PostureFlowService {
     pub fn new() -> Self {
         let current = system::get_active_profile();
         Self {
@@ -20,8 +24,8 @@ impl PopProfileService {
     }
 }
 
-#[interface(name = "io.github.mzia.PopProfile")]
-impl PopProfileService {
+#[interface(name = "io.github.mzia.PostureFlow")]
+impl PostureFlowService {
     /// Returns the active profile name ("home", "work", "dev", "travel", or "default")
     async fn get_active_profile(&self) -> String {
         let profile = self.active_profile.lock().await;
@@ -36,7 +40,7 @@ impl PopProfileService {
         #[zbus(header)] hdr: zbus::message::Header<'_>,
         profile: String,
     ) -> fdo::Result<()> {
-        check_polkit_auth(conn, hdr.sender(), "io.github.mzia.PopProfile.set-profile").await?;
+        check_posture_auth(conn, hdr.sender()).await?;
 
         let target_id = profile.trim().to_lowercase();
         system::apply_profile_by_id(&target_id)
@@ -100,7 +104,7 @@ impl PopProfileService {
         #[zbus(header)] hdr: zbus::message::Header<'_>,
         toml_content: String,
     ) -> fdo::Result<String> {
-        check_polkit_auth(conn, hdr.sender(), "io.github.mzia.PopProfile.set-profile").await?;
+        check_posture_auth(conn, hdr.sender()).await?;
 
         let parsed = crate::config::ProfileConfig::from_toml(&toml_content)
             .map_err(|e| fdo::Error::InvalidArgs(format!("TOML syntax error: {}", e)))?;
@@ -117,7 +121,7 @@ impl PopProfileService {
         #[zbus(header)] hdr: zbus::message::Header<'_>,
         id: String,
     ) -> fdo::Result<()> {
-        check_polkit_auth(conn, hdr.sender(), "io.github.mzia.PopProfile.set-profile").await?;
+        check_posture_auth(conn, hdr.sender()).await?;
 
         crate::config::delete_custom_profile(&id)
             .map_err(|e| fdo::Error::Failed(e))
@@ -135,7 +139,7 @@ impl PopProfileService {
         #[zbus(connection)] conn: &zbus::Connection,
         #[zbus(header)] hdr: zbus::message::Header<'_>,
     ) -> fdo::Result<()> {
-        check_polkit_auth(conn, hdr.sender(), "io.github.mzia.PopProfile.set-profile").await?;
+        check_posture_auth(conn, hdr.sender()).await?;
 
         system::reset_to_defaults()
             .map_err(|e| fdo::Error::Failed(e))?;
@@ -150,6 +154,83 @@ impl PopProfileService {
     /// D-Bus Signal emitted whenever the profile changes
     #[zbus(signal)]
     async fn profile_changed(ctxt: &zbus::SignalContext<'_>, new_profile: &str) -> zbus::Result<()>;
+}
+
+/// Backwards-compatibility wrapper serving io.github.mzia.PopProfile
+#[derive(Clone)]
+pub struct LegacyPopProfileService(pub PostureFlowService);
+
+#[interface(name = "io.github.mzia.PopProfile")]
+impl LegacyPopProfileService {
+    async fn get_active_profile(&self) -> String {
+        self.0.get_active_profile().await
+    }
+
+    async fn set_profile(
+        &self,
+        #[zbus(signal_context)] ctxt: zbus::SignalContext<'_>,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+        profile: String,
+    ) -> fdo::Result<()> {
+        self.0.set_profile(ctxt, conn, hdr, profile).await
+    }
+
+    async fn list_profiles(&self) -> Vec<(String, String, String, String, bool)> {
+        self.0.list_profiles().await
+    }
+
+    async fn get_profile_details(&self, id: String) -> fdo::Result<String> {
+        self.0.get_profile_details(id).await
+    }
+
+    async fn validate_profile(&self, toml_content: String) -> fdo::Result<(bool, Vec<String>, String)> {
+        self.0.validate_profile(toml_content).await
+    }
+
+    async fn save_custom_profile(
+        &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+        toml_content: String,
+    ) -> fdo::Result<String> {
+        self.0.save_custom_profile(conn, hdr, toml_content).await
+    }
+
+    async fn delete_custom_profile(
+        &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+        id: String,
+    ) -> fdo::Result<()> {
+        self.0.delete_custom_profile(conn, hdr, id).await
+    }
+
+    async fn get_status(&self) -> String {
+        self.0.get_status().await
+    }
+
+    async fn reset_to_defaults(
+        &self,
+        #[zbus(signal_context)] ctxt: zbus::SignalContext<'_>,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+    ) -> fdo::Result<()> {
+        self.0.reset_to_defaults(ctxt, conn, hdr).await
+    }
+
+    #[zbus(signal)]
+    async fn profile_changed(ctxt: &zbus::SignalContext<'_>, new_profile: &str) -> zbus::Result<()>;
+}
+
+async fn check_posture_auth(
+    conn: &zbus::Connection,
+    sender: Option<&zbus::names::UniqueName<'_>>,
+) -> Result<(), fdo::Error> {
+    if check_polkit_auth(conn, sender, "io.github.mzia.PostureFlow.set-profile").await.is_err() {
+        check_polkit_auth(conn, sender, "io.github.mzia.PopProfile.set-profile").await?;
+    }
+    Ok(())
 }
 
 async fn check_polkit_auth(

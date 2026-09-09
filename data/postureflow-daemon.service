@@ -1,0 +1,12 @@
+[Unit]
+Description=PostureFlow Context Posture Manager D-Bus Daemon
+After=network.target dbus.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/postureflow-daemon --daemon
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

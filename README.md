@@ -1,4 +1,4 @@
-# pop-profile-manager
+# PostureFlow
 
 [![CI Safety & D-Bus Tests](https://github.com/mzia/pop-profile-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/mzia/pop-profile-manager/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -6,9 +6,11 @@
 [![OS: Pop!_OS](https://img.shields.io/badge/OS-Pop!__OS%20%7C%20Ubuntu-orange.svg)](https://system76.com/pop)
 [![Hardware: Framework Laptop](https://img.shields.io/badge/Hardware-Framework%20Laptop-black.svg)](https://frame.work)
 
-> **Context-aware security, developer, and lifestyle profile manager for Pop!_OS and Ubuntu laptops.**
+> **Dynamic security posture, hardware power, and lifestyle workflow orchestrator for Linux & Pop!_OS laptops.** *(Formerly pop-profile-manager)*
 
-`pop-profile` dynamically bridges the gap between paranoid security, frictionless software engineering, and casual entertainment. Switch postures with a single command without ever being locked out of your laptop.
+`PostureFlow` dynamically bridges the gap between paranoid security, frictionless software engineering, and casual entertainment. Switch postures with a single command or status bar click without ever risking lockout from your laptop.
+
+Includes full backwards compatibility for all legacy `pop-profile` commands, paths, and D-Bus interfaces.
 
 ---
 
@@ -18,7 +20,7 @@
 
 Download the latest `.deb` from [GitHub Releases](https://github.com/mzia/pop-profile-manager/releases) and install:
 ```bash
-sudo dpkg -i pop-profile_1.0.0_amd64.deb
+sudo dpkg -i dist/postureflow_1.0.0_amd64.deb
 ```
 
 ### Option 2: Install from Source
@@ -27,9 +29,9 @@ sudo dpkg -i pop-profile_1.0.0_amd64.deb
 git clone https://github.com/mzia/pop-profile-manager.git
 cd pop-profile-manager
 
-# Build Rust daemon and Debian package
+# Build Rust binaries and Debian package
 make deb
-sudo dpkg -i dist/pop-profile_1.0.0_amd64.deb
+sudo dpkg -i dist/postureflow_1.0.0_amd64.deb
 
 # Or install directly with the installer script
 sudo ./install.sh
@@ -38,27 +40,28 @@ sudo ./install.sh
 ### Option 3: Install via Flatpak Bundle
 
 ```bash
-# Build or install the sandboxed Flatpak package
+# Build and install the sandboxed Flatpak package
 make flatpak
-flatpak install --user dist/io.github.mzia.PopProfile.flatpak
+flatpak install --user dist/io.github.mzia.PostureFlow.flatpak
 
 # Run Flatpak application
-flatpak run io.github.mzia.PopProfile
+flatpak run io.github.mzia.PostureFlow
 ```
 
 Now switch postures anytime:
 ```bash
-sudo pop-profile --home      # Streaming, Proton gaming, phone sync (GSConnect)
-sudo pop-profile --work      # Office & corporate VPN (dev ports blocked to LAN)
-sudo pop-profile --dev       # Coding & debugging (ptrace allowed, 524k file watchers)
-sudo pop-profile --travel    # Coffee shops, airports & public Wi-Fi (stealth mode, alias: --secure)
-sudo pop-profile --reset     # Reset all settings back to Pop!_OS factory defaults
-pop-profile --status         # Inspect live posture without sudo
+sudo postureflow --home      # Streaming, Proton gaming, phone sync (GSConnect)
+sudo postureflow --work      # Office & corporate VPN (dev ports blocked to LAN)
+sudo postureflow --dev       # Coding & debugging (ptrace allowed, 524k file watchers)
+sudo postureflow --travel    # Coffee shops, airports & public Wi-Fi (stealth mode, alias: --secure)
+sudo postureflow --reset     # Reset all settings back to Pop!_OS factory defaults
+postureflow --status         # Inspect live posture without sudo
 ```
+*(Legacy commands like `sudo pop-profile --dev` continue to work seamlessly via automatic compatibility symlinks).*
 
 ---
 
-## 🎯 Why pop-profile?
+## 🎯 Why PostureFlow?
 
 Linux security tools (like UFW, firewalld, or raw sysctl) are static. But laptop users live in dynamic contexts:
 
@@ -67,7 +70,7 @@ Linux security tools (like UFW, firewalld, or raw sysctl) are static. But laptop
 * **The Home Entertainment Barrier:** Overly aggressive firewalls break Steam Remote Play, local game downloads, and phone sync (GSConnect/LocalSend).
 * **The Update Drift Problem:** Every `apt upgrade` or kernel bump wipes runtime sysctl tuning and resets UFW configurations.
 
-`pop-profile` solves all of this with zero dependencies, Rust D-Bus integration, and built-in anti-lockout guarantees.
+`PostureFlow` solves all of this with zero dependencies, a native Rust D-Bus daemon, Polkit cached authorization, and built-in anti-lockout guarantees.
 
 ---
 
@@ -92,7 +95,7 @@ Linux security tools (like UFW, firewalld, or raw sysctl) are static. But laptop
 
 ## 🔒 Anti-Lockout Invariants
 
-`pop-profile` is built around safety invariants ensuring you can **never lock yourself out**:
+`PostureFlow` is built around safety invariants ensuring you can **never lock yourself out**:
 
 1. **SSH Auto-Preservation:** If an active SSH session or daemon is detected, port `22/tcp` is automatically whitelisted before the firewall is touched.
 2. **Loopback IPC Guarantee:** Explicit `allow on lo` rules guarantee desktop environments (Wayland, X11, COSMIC, GNOME), PipeWire audio, and D-Bus never freeze.
@@ -101,43 +104,44 @@ Linux security tools (like UFW, firewalld, or raw sysctl) are static. But laptop
 
 Run the test suite anytime:
 ```bash
-pop-profile --test
+postureflow --test
 ```
 
 ---
 
 ## 🦀 Rust D-Bus Daemon & Polkit Security
 
-`pop-profile` includes a native Rust system daemon (`pop-profile-daemon`) built with [`zbus`](https://crates.io/crates/zbus) providing an asynchronous D-Bus service on `io.github.mzia.PopProfile`.
+`PostureFlow` includes a native Rust system daemon (`postureflow-daemon`) built with [`zbus`](https://crates.io/crates/zbus) providing an asynchronous D-Bus service on `io.github.mzia.PostureFlow` (with full fallback on `io.github.mzia.PopProfile`).
 
 ### Three-Tier Architecture
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
 │  FRONTENDS:                                                 │
-│  1. COSMIC Panel Applet (`pop-profile-applet`)              │
+│  1. Top Bar Applet (`postureflow-applet`)                   │
 │     • StatusNotifierItem + DBusMenu in top panel            │
 │     • Live symbolic icons, 1-click switcher & launcher      │
-│  2. Floating Settings GUI (`pop-profile-gui`)               │
+│  2. Floating Settings GUI (`postureflow-gui`)               │
 │     • COSMIC-styled floating window with tabbed editor      │
 │     • Visual UFW rules, Framework power, TOML import/export │
-│  3. CLI (`pop-profile`)                                     │
+│  3. CLI (`postureflow` / `pop-profile`)                     │
 │     • Instant terminal posture switching & status           │
 └──────────────────────────────┬──────────────────────────────┘
-                               │ D-Bus Calls (io.github.mzia.PopProfile)
+                               │ D-Bus Calls (io.github.mzia.PostureFlow)
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  SECURITY: Polkit Policy (io.github.mzia.PopProfile)        │
+│  SECURITY: Polkit Policy (io.github.mzia.PostureFlow)       │
 │  • 5-Minute Cached Admin Auth (`auth_admin_keep`)           │
 │  • Prompts once on first switch, instant subsequent actions │
 └──────────────────────────────┬──────────────────────────────┘
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  PRIVILEGED BACKEND: pop-profile-daemon (Rust + zbus)       │
+│  PRIVILEGED BACKEND: postureflow-daemon (Rust + zbus)       │
 │  • Emits ProfileChanged signals to update UI components     │
-│  • Declarative TOML scanner (/etc/pop-profile/profiles.d)   │
+│  • Declarative TOML scanner (/etc/postureflow/profiles.d)   │
 │  • Safety engine (anti-lockout, loopback, SSH preservation) │
+│  • Dual-registers io.github.mzia.PostureFlow & PopProfile   │
 │  • Manages sysctl, UFW, Framework battery, and limits       │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -146,7 +150,7 @@ pop-profile --test
 
 Desktop profile switching and custom profile imports use Polkit's `auth_admin_keep` policy (matching `sudo`). When you switch profiles or import configurations from the desktop, you authenticate once with your password/fingerprint; subsequent changes over the next 5 minutes are applied instantly without interrupting your workflow.
 
-### D-Bus API Specification (`io.github.mzia.PopProfile`)
+### D-Bus API Specification (`io.github.mzia.PostureFlow`)
 
 | Member | Type | Signature | Description |
 | :--- | :--- | :--- | :--- |
@@ -157,53 +161,55 @@ Desktop profile switching and custom profile imports use Polkit's `auth_admin_ke
 | `ListProfiles` | Method | `() -> (as)` | Discovers and returns all built-in and custom profile IDs. |
 | `GetProfileDetails` | Method | `(s) -> (s)` | Returns the complete declarative TOML configuration for any profile. |
 | `ValidateProfile` | Method | `(s) -> (b, s)` | Validates TOML against anti-lockout rules, returning sanitized TOML or error. |
-| `SaveCustomProfile` | Method | `(s, s) -> ()` | Saves a validated profile TOML to `/etc/pop-profile/profiles.d/<id>.pop-profile.toml`. |
-| `DeleteCustomProfile`| Method | `(s) -> ()` | Removes a custom profile from `/etc/pop-profile/profiles.d/`. |
+| `SaveCustomProfile` | Method | `(s, s) -> ()` | Saves a validated profile TOML to `/etc/postureflow/profiles.d/<id>.postureflow.toml`. |
+| `DeleteCustomProfile`| Method | `(s) -> ()` | Removes a custom profile from `/etc/postureflow/profiles.d/`. |
 | `ProfileChanged` | Signal | `(s)` | Broadcasts when a profile switch occurs. |
+
+*(All methods and signals are also mirrored to `io.github.mzia.PopProfile` for legacy integrations).*
 
 ---
 
-## 🖥️ Native COSMIC Desktop Panel Applet
+## 🖥️ Desktop Top Bar & COSMIC Panel Applet
 
-`pop-profile-applet` integrates directly into the **Pop!_OS COSMIC desktop panel** (`cosmic-applet-status-area`):
+`postureflow-applet` integrates directly into the **Pop!_OS COSMIC desktop panel** and standard Freedesktop system trays:
 
 * **Real-time Symbolic Icons:** Automatically synchronizes with your active profile:
   - 🏠 **Home:** `user-home-symbolic`
   - 💼 **Work:** `applications-office-symbolic`
   - 💻 **Dev:** `utilities-terminal-symbolic`
   - ✈️ **Travel:** `security-high-symbolic` (alias: `secure`)
-* **One-Click Native Popover Menu:** Powered by the standard `com.canonical.dbusmenu` protocol, rendered natively inside the panel using your active COSMIC theme and accent colors.
+* **One-Click Native Popover Menu:** Powered by the standard `com.canonical.dbusmenu` protocol, rendered natively inside the panel using your active desktop theme and accent colors.
 * **Instant Profile Cycling:** Left-click the panel icon directly to cycle instantly through profiles (`Home` ➔ `Work` ➔ `Dev` ➔ `Travel`).
 * **Direct GUI Launcher:** Click **`⚙ Configure Profiles & Import...`** to open the floating settings GUI.
 * **Desktop Notifications:** Dispatches native notifications on profile changes and security posture audits via `org.freedesktop.Notifications`.
-* **Resilient Watchdog:** Automatically reconnects and re-registers whenever `cosmic-panel` or the session restarts.
-* **Session Autostart:** Ships with a systemd user service (`pop-profile-applet.service`) and standard desktop entry (`io.github.mzia.PopProfile.Applet.desktop`).
+* **Resilient Watchdog:** Automatically reconnects and re-registers whenever the desktop shell or session restarts.
+* **Session Autostart:** Ships with a systemd user service (`postureflow-applet.service`) and standard desktop entry (`io.github.mzia.PostureFlow.Applet.desktop`).
 
 ### Running the Applet
 ```bash
 # Start in background session
-pop-profile-applet
+postureflow-applet
 
 # Query current posture
-pop-profile-applet --status
+postureflow-applet --status
 
 # Quick cycle next profile
-pop-profile-applet --cycle
+postureflow-applet --cycle
 
-# Reset all settings to Pop!_OS factory defaults via D-Bus daemon
-pop-profile-applet --reset
+# Reset all settings to factory defaults via D-Bus daemon
+postureflow-applet --reset
 ```
 
 ---
 
-## 🎨 COSMIC Floating Desktop GUI (`pop-profile-gui`)
+## 🎨 Floating Desktop Settings GUI (`postureflow-gui`)
 
-`pop-profile-gui` provides a rich, COSMIC-styled desktop window designed to open as a floating tile (`io.github.mzia.PopProfile.Settings`):
+`postureflow-gui` provides a rich, modern desktop window designed to open as a floating tile (`io.github.mzia.PostureFlow`):
 
 * **Profile Sidebar:** Browse built-in profiles and custom configurations with live active badges.
 * **Factory Defaults Reset**: One-click **`🔄 Reset to Factory Defaults`** with safety confirmation dialog to immediately restore unmanaged out-of-the-box settings (UFW disabled, balanced power profile, battery 100%, and default 15-minute idle delay).
 * **1-Click Import & Export:**
-  - **`📥 Import Config`**: Pick any `.pop-profile.toml` file to inspect, validate, and install.
+  - **`📥 Import Config`**: Pick any `.postureflow.toml` or `.pop-profile.toml` file to inspect, validate, and install.
   - **`📤 Export Config`**: Export custom or built-in profiles to share with teammates.
 * **Tabbed Visual Editor:**
   - **General:** Profile ID, Name, Description, and Category tags.
@@ -217,9 +223,9 @@ pop-profile-applet --reset
 
 ## 📝 Custom Profiles & Declarative TOML Schema
 
-Custom profiles are stored as `.pop-profile.toml` files in `/etc/pop-profile/profiles.d/` (system-wide) or `~/.config/pop-profile/profiles.d/` (user-specific).
+Custom profiles are stored as `.postureflow.toml` (or legacy `.pop-profile.toml`) files in `/etc/postureflow/profiles.d/` (system-wide) or `~/.config/postureflow/profiles.d/` (user-specific).
 
-### Example Configuration: `ai-lab.pop-profile.toml`
+### Example Configuration: `ai-lab.postureflow.toml`
 
 ```toml
 [profile]
@@ -267,7 +273,7 @@ Every imported or saved profile is checked by the safety validator:
 
 ## 🔄 Self-Healing Post-Upgrade Hook
 
-`pop-profile` includes an APT post-invoke hook registered at `/etc/apt/apt.conf.d/99-popos-profile-health`. 
+`PostureFlow` includes an APT post-invoke hook registered at `/etc/apt/apt.conf.d/99-postureflow-health`. 
 
 Whenever an `apt upgrade`, kernel update, or patch finishes installing, the hook automatically validates and re-applies your profile settings in the background.
 
@@ -277,9 +283,10 @@ Whenever an `apt upgrade`, kernel update, or patch finishes installing, the hook
 
 * **Manual Page:**
   ```bash
+  man postureflow
   man pop-profile
   ```
-* **Shell Completions:** Automatically installed for **Bash** (`/etc/bash_completion.d/pop-profile`) and **Zsh** (`/usr/share/zsh/vendor-completions/_pop-profile`).
+* **Shell Completions:** Automatically installed for **Bash** (`/etc/bash_completion.d/postureflow`) and **Zsh** (`/usr/share/zsh/vendor-completions/_postureflow`).
 
 ---
 
@@ -288,20 +295,21 @@ Whenever an `apt upgrade`, kernel update, or patch finishes installing, the hook
 ```text
 pop-profile-manager/
 ├── bin/
-│   └── pop-profile                  # Standalone CLI executable
+│   ├── postureflow                  # Standalone CLI executable
+│   └── pop-profile                  # Compatibility symlink to postureflow
 ├── src/
 │   ├── lib.rs                       # Shared library modules
 │   ├── main.rs                      # Rust D-Bus daemon entrypoint
 │   ├── profile.rs                   # Profile enum & icon mappings
 │   ├── system.rs                    # System controller (sysctl, ufw, limits, power)
-│   ├── dbus.rs                      # zbus asynchronous D-Bus service & signals
+│   ├── dbus.rs                      # Dual zbus D-Bus services (PostureFlow + PopProfile)
 │   ├── config/                      # Declarative profile engine
 │   │   ├── mod.rs                   # Built-in profile definitions & directory scanner
 │   │   ├── schema.rs                # Serde TOML schema (firewall, kernel, framework)
 │   │   └── validator.rs             # Strict anti-lockout safety validation
 │   ├── bin/
-│   │   ├── pop-profile-applet.rs    # Native COSMIC Panel Applet entrypoint
-│   │   └── pop-profile-gui.rs       # COSMIC-themed floating settings GUI entrypoint
+│   │   ├── postureflow-applet.rs    # Top Bar / COSMIC Panel Applet entrypoint
+│   │   └── postureflow-gui.rs       # Floating settings GUI entrypoint
 │   └── applet/
 │       ├── mod.rs                   # Applet module definitions
 │       ├── state.rs                 # Thread-safe profile state manager
@@ -309,32 +317,40 @@ pop-profile-manager/
 │       ├── menu.rs                  # com.canonical.dbusmenu provider
 │       └── sni.rs                   # org.kde.StatusNotifierItem provider
 ├── data/
-│   ├── io.github.mzia.PopProfile.Applet.desktop   # COSMIC panel applet desktop entry
-│   ├── io.github.mzia.PopProfile.Settings.desktop # Floating GUI settings desktop entry
-│   ├── pop-profile-applet.service   # Systemd user session autostart service
-│   ├── pop-profile-daemon.service   # Systemd privileged system service
-│   ├── io.github.mzia.PopProfile.policy # Polkit 5-min cached admin authorization
-│   └── io.github.mzia.PopProfile.conf   # D-Bus system bus permissions
+│   ├── io.github.mzia.PostureFlow.desktop         # Floating GUI settings desktop entry
+│   ├── io.github.mzia.PostureFlow.Applet.desktop  # Top bar panel applet desktop entry
+│   ├── io.github.mzia.PostureFlow.metainfo.xml    # AppStream 1.0 metadata
+│   ├── icons/
+│   │   └── io.github.mzia.PostureFlow.svg         # High-resolution vector icon
+│   ├── postureflow-applet.service                 # Systemd user session autostart service
+│   ├── postureflow-daemon.service                 # Systemd privileged system service
+│   ├── io.github.mzia.PostureFlow.policy          # Polkit 5-min cached admin authorization
+│   ├── io.github.mzia.PostureFlow.conf            # D-Bus system bus permissions
+│   └── io.github.mzia.PopProfile.conf             # Legacy D-Bus compatibility configuration
+├── io.github.mzia.PostureFlow.yml                 # Flatpak application manifest
 ├── man/
-│   └── pop-profile.1                # Native Linux manual page
+│   └── postureflow.1                              # Native Linux manual page
 ├── completions/
-│   ├── pop-profile.bash             # Bash auto-completion
-│   └── pop-profile.zsh              # Zsh auto-completion
+│   ├── postureflow.bash                           # Bash auto-completion
+│   └── postureflow.zsh                            # Zsh auto-completion
 ├── scripts/
-│   └── build_deb.sh                 # Automated Debian .deb package builder
+│   ├── build_deb.sh                               # Automated Debian .deb package builder
+│   ├── build_flatpak.sh                           # Flatpak build and bundle script
+│   └── generate_cargo_sources.py                  # Offline cargo vendor generator
 ├── tests/
-│   ├── test_safety.sh               # 8-point automated anti-lockout test suite
-│   ├── test_dbus.sh                 # D-Bus integration test suite
-│   └── test_applet.sh               # Applet StatusNotifierItem/DBusMenu integration test
+│   ├── test_safety.sh                             # 8-point automated anti-lockout test suite
+│   ├── test_dbus.sh                               # D-Bus integration test suite
+│   └── test_applet.sh                             # Applet StatusNotifierItem/DBusMenu integration test
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml                   # CI testing workflow (Rust + Safety + D-Bus)
-│       └── release.yml              # Automated .deb build & GitHub Releases
-├── install.sh                       # One-command system installer
-├── uninstall.sh                     # Clean uninstaller (restores Pop!_OS defaults)
-├── Makefile                         # 'make build', 'make install', 'make deb', 'make test'
-├── LICENSE                          # MIT License (© M. Zia)
-└── README.md                        # Project documentation
+│       ├── ci.yml                                 # CI testing workflow (Rust + Safety + D-Bus)
+│       ├── release.yml                            # Automated .deb build & GitHub Releases
+│       └── flatpak.yml                            # Automated Flatpak bundle validation
+├── install.sh                                     # One-command system installer
+├── uninstall.sh                                   # Clean uninstaller (restores Pop!_OS defaults)
+├── Makefile                                       # 'make build', 'make install', 'make deb', 'make flatpak'
+├── LICENSE                                        # MIT License (© M. Zia)
+└── README.md                                      # Project documentation
 ```
 
 ---
@@ -344,46 +360,49 @@ pop-profile-manager/
 - [x] **Phase 1: CLI & Rust D-Bus Daemon**
   - [x] 4 lifestyle/context profiles (Home, Work, Dev, Travel)
   - [x] Anti-lockout invariant test suite
-  - [x] Rust daemon with `zbus` on `io.github.mzia.PopProfile`
+  - [x] Rust daemon with `zbus` on `io.github.mzia.PostureFlow` & `io.github.mzia.PopProfile`
   - [x] Polkit policy with 5-minute cached admin authorization (`auth_admin_keep`)
   - [x] APT post-upgrade self-healing hook
 - [x] **Phase 2: Packaging & Distribution**
   - [x] Debian `.deb` package generation (`scripts/build_deb.sh` / `make deb`)
   - [x] Standard systemd, Polkit, D-Bus, completions, and man page packaging
   - [x] Automated GitHub Actions release workflow (`.github/workflows/release.yml`)
-- [x] **Phase 3: Native COSMIC Panel Applet**
-  - [x] Rust COSMIC panel applet (`pop-profile-applet`) with live status icon
+- [x] **Phase 3: Top Bar & COSMIC Panel Applet**
+  - [x] Rust panel applet (`postureflow-applet`) with live status icon
   - [x] Standard `StatusNotifierItem` + `com.canonical.dbusmenu` architecture
   - [x] Dynamic symbolic icons matching Pop!_OS / COSMIC desktop theme
   - [x] Popover dropdown menu with one-click profile switching and power status
-  - [x] Watchdog auto-reconnect on COSMIC panel / session restarts
-  - [x] Desktop entry (`X-CosmicApplet=true`) and systemd user service
+  - [x] Watchdog auto-reconnect on panel / session restarts
+  - [x] Desktop entry and systemd user service
 - [x] **Phase 4: Declarative Custom Profile Engine**
-  - [x] Declarative `.pop-profile.toml` schema (metadata, firewall, sysctl, framework power)
-  - [x] Dynamic multi-directory profile scanner (`/etc/pop-profile/profiles.d/`, `~/.config/pop-profile/profiles.d/`)
+  - [x] Declarative `.postureflow.toml` schema (metadata, firewall, sysctl, framework power)
+  - [x] Dynamic multi-directory profile scanner (`/etc/postureflow/profiles.d/`, `~/.config/postureflow/profiles.d/`)
   - [x] Anti-lockout validation & sanitization engine (loopback, eBPF, pipes)
   - [x] D-Bus API extension (`ListProfiles`, `GetProfileDetails`, `ValidateProfile`, `SaveCustomProfile`, `DeleteCustomProfile`)
 - [x] **Phase 5: Floating Desktop Settings GUI**
-  - [x] COSMIC-styled floating window application (`pop-profile-gui`)
+  - [x] Modern styled floating window application (`postureflow-gui`)
   - [x] Sidebar profile manager with active indicators and 1-click TOML import/export
   - [x] Interactive tabbed editor (General, Firewall, Kernel, Framework Power)
   - [x] Live "Test & Verify Safety" pre-flight checks
-  - [x] Direct launcher integration in COSMIC top bar panel applet menu
+  - [x] Direct launcher integration in top bar panel applet menu
 - [x] **Phase 6: Flatpak Distribution**
-  - [x] Flathub-compliant Flatpak manifest (`io.github.mzia.PopProfile.yml`)
+  - [x] Flathub-compliant Flatpak manifest (`io.github.mzia.PostureFlow.yml`)
   - [x] Sandboxed desktop portal integration (Wayland, X11 fallback, DRI, file chooser)
-  - [x] Host system D-Bus portal access (`io.github.mzia.PopProfile`) for privileged operations
-  - [x] AppStream 1.0 metainfo specification (`data/io.github.mzia.PopProfile.metainfo.xml`)
-  - [x] Scalable vector application iconography (`data/icons/io.github.mzia.PopProfile.svg`)
+  - [x] Host system D-Bus portal access (`io.github.mzia.PostureFlow`) for privileged operations
+  - [x] AppStream 1.0 metainfo specification (`data/io.github.mzia.PostureFlow.metainfo.xml`)
+  - [x] Scalable vector application iconography (`data/icons/io.github.mzia.PostureFlow.svg`)
   - [x] Zero-dependency offline cargo sources generator (`scripts/generate_cargo_sources.py`)
   - [x] Automated builder & packager (`scripts/build_flatpak.sh` / `make flatpak`)
   - [x] Automated GitHub Actions Flatpak CI workflow (`.github/workflows/flatpak.yml`)
+- [x] **Phase 7: Project Evolution & Rebranding**
+  - [x] Transition project name from `pop-profile-manager` to `PostureFlow`
+  - [x] Full backwards compatibility for legacy `pop-profile` binaries, configurations, and D-Bus interfaces
 
 ---
 
 ## 🗑️ Uninstallation
 
-To cleanly remove `pop-profile` and restore Pop!_OS to factory defaults:
+To cleanly remove `PostureFlow` and restore system settings to factory defaults:
 ```bash
 sudo ./uninstall.sh
 ```

@@ -1,9 +1,9 @@
 use eframe::egui;
-use pop_profile::config::{
+use postureflow::config::{
     self, validate_and_sanitize, FirewallConfig, FrameworkPowerConfig, PortRule, ProfileConfig,
     ProfileMetadata, SecurityLimitsConfig, DesktopConfig,
 };
-use pop_profile::system;
+use postureflow::system;
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -63,18 +63,33 @@ impl GuiApp {
     }
 
     fn do_factory_reset(&mut self) {
-        let dbus_attempt = std::process::Command::new("gdbus")
+        let mut dbus_attempt = std::process::Command::new("gdbus")
             .args([
                 "call",
                 "--system",
                 "--dest",
-                "io.github.mzia.PopProfile",
+                "io.github.mzia.PostureFlow",
                 "--object-path",
-                "/io/github/mzia/PopProfile",
+                "/io/github/mzia/PostureFlow",
                 "--method",
-                "io.github.mzia.PopProfile.ResetToDefaults",
+                "io.github.mzia.PostureFlow.ResetToDefaults",
             ])
             .output();
+
+        if dbus_attempt.as_ref().map(|o| !o.status.success()).unwrap_or(true) {
+            dbus_attempt = std::process::Command::new("gdbus")
+                .args([
+                    "call",
+                    "--system",
+                    "--dest",
+                    "io.github.mzia.PopProfile",
+                    "--object-path",
+                    "/io/github/mzia/PopProfile",
+                    "--method",
+                    "io.github.mzia.PopProfile.ResetToDefaults",
+                ])
+                .output();
+        }
 
         let mut success = false;
         let mut err_msg = String::new();
@@ -141,7 +156,7 @@ impl eframe::App for GuiApp {
             .resizable(false)
             .default_size(240.0)
             .show(ui, |ui| {
-                ui.heading("Pop! Profiles");
+                ui.heading("PostureFlow Profiles");
                 let active_header = if self.active_profile_id == "default" {
                     "Active: [FACTORY DEFAULT]".to_string()
                 } else {
@@ -617,23 +632,37 @@ fn main() -> eframe::Result<()> {
                 return Ok(());
             }
             "-V" | "--version" => {
-                println!("pop-profile-gui 1.0.0");
+                println!("postureflow-gui 1.0.0");
                 return Ok(());
             }
             "-r" | "--reset" | "reset" | "--default" | "default" => {
                 println!("[*] Resetting to Pop!_OS factory defaults...");
-                let dbus_res = std::process::Command::new("gdbus")
+                let mut dbus_res = std::process::Command::new("gdbus")
                     .args([
                         "call",
                         "--system",
                         "--dest",
-                        "io.github.mzia.PopProfile",
+                        "io.github.mzia.PostureFlow",
                         "--object-path",
-                        "/io/github/mzia/PopProfile",
+                        "/io/github/mzia/PostureFlow",
                         "--method",
-                        "io.github.mzia.PopProfile.ResetToDefaults",
+                        "io.github.mzia.PostureFlow.ResetToDefaults",
                     ])
                     .output();
+                if dbus_res.as_ref().map(|o| !o.status.success()).unwrap_or(true) {
+                    dbus_res = std::process::Command::new("gdbus")
+                        .args([
+                            "call",
+                            "--system",
+                            "--dest",
+                            "io.github.mzia.PopProfile",
+                            "--object-path",
+                            "/io/github/mzia/PopProfile",
+                            "--method",
+                            "io.github.mzia.PopProfile.ResetToDefaults",
+                        ])
+                        .output();
+                }
                 if let Ok(out) = dbus_res {
                     if out.status.success() {
                         println!("[+] Successfully reset to Pop!_OS factory defaults (via D-Bus daemon).");
@@ -652,8 +681,8 @@ fn main() -> eframe::Result<()> {
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("Pop! Profile Manager")
-            .with_app_id("io.github.mzia.PopProfile.Settings")
+            .with_title("PostureFlow - Security & Profile Settings")
+            .with_app_id("io.github.mzia.PostureFlow")
             .with_inner_size([880.0, 620.0])
             .with_min_inner_size([720.0, 480.0])
             .with_resizable(true),
@@ -661,7 +690,7 @@ fn main() -> eframe::Result<()> {
     };
 
     eframe::run_native(
-        "Pop! Profile Manager",
+        "PostureFlow",
         native_options,
         Box::new(|cc| {
             // Apply COSMIC styling

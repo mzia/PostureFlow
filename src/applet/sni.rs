@@ -24,13 +24,13 @@ impl StatusNotifierItem {
 
     #[zbus(property)]
     async fn id(&self) -> &str {
-        "pop-profile"
+        "postureflow"
     }
 
     #[zbus(property)]
     async fn title(&self) -> String {
         let state = self.state.read().await;
-        format!("Pop! Profile ({})", state.active_profile.as_str().to_uppercase())
+        format!("PostureFlow ({})", state.active_profile.as_str().to_uppercase())
     }
 
     #[zbus(property)]
