@@ -431,6 +431,7 @@ case "${1:-}" in
         echo "  --ports         Inspect actively listening sockets and process ownership"
         echo "  --autoflow      Display Auto-Flow network detection and configuration"
         echo "  --triggers      Display App-Aware Dynamic Triggers rules and active app status"
+        echo "  -c, --schedule  Display Circadian Schedule, active window & battery telemetry"
         echo "  --test          Run automated anti-lockout & integrity test suite"
         echo "  -r, --reset     Reset all settings back to Pop!_OS factory defaults"
         echo "  --default       Alias for --reset"
