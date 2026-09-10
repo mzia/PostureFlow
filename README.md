@@ -109,46 +109,114 @@ postureflow --test
 
 ---
 
-## 🦀 Rust D-Bus Daemon & Polkit Security
+## 🏛️ System Design & Architecture
 
-`PostureFlow` includes a native Rust system daemon (`postureflow-daemon`) built with [`zbus`](https://crates.io/crates/zbus) providing an asynchronous D-Bus service on `io.github.mzia.PostureFlow`.
+`PostureFlow` is architected as an asynchronous, event-driven system orchestrator built entirely in native Rust. It decouples high-level user interfaces and autonomous triggers from low-level Linux kernel and hardware enforcement mechanisms through a privileged system daemon and PolicyKit security boundary.
 
-### Three-Tier Architecture
+### High-Level Architecture
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  FRONTENDS:                                                 │
-│  1. Top Bar Applet (`postureflow-applet`)                   │
-│     • StatusNotifierItem + DBusMenu in top panel            │
-│     • Live symbolic icons, 1-click switcher & launcher      │
-│  2. Floating Settings GUI (`postureflow-gui`)               │
-│     • COSMIC-styled floating window with tabbed editor      │
-│     • Visual UFW rules, Framework power, TOML import/export │
-│  3. CLI (`postureflow`)                                     │
-│     • Instant terminal posture switching & status           │
-└──────────────────────────────┬──────────────────────────────┘
-                                │ D-Bus Calls (io.github.mzia.PostureFlow)
-                                ▼
-┌─────────────────────────────────────────────────────────────┐
-│  SECURITY: Polkit Policy (io.github.mzia.PostureFlow)       │
-│  • 5-Minute Cached Admin Auth (`auth_admin_keep`)           │
-│  • Prompts once on first switch, instant subsequent actions │
-└──────────────────────────────┬──────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────┐
-│  PRIVILEGED BACKEND: postureflow-daemon (Rust + zbus)       │
-│  • Emits ProfileChanged signals to update UI components     │
-│  • Declarative TOML scanner (/etc/postureflow/profiles.d)   │
-│  • Safety engine (anti-lockout, loopback, SSH preservation) │
-│  • Registers native io.github.mzia.PostureFlow service      │
-│  • Manages sysctl, UFW, Framework battery, and limits       │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Frontends ["🖥️ Presentation Layer (User Space)"]
+        APPLET["Top Bar COSMIC Applet (StatusNotifierItem + DBusMenu)"]
+        GUI["Floating Settings GUI Cockpit (egui / eframe)"]
+        CLI["Terminal CLI & Shell Completions (postureflow)"]
+    end
+
+    subgraph SecurityBoundary ["🔐 IPC & Security Boundary"]
+        DBUS["D-Bus System Bus (io.github.mzia.PostureFlow)"]
+        POLKIT["Polkit Authority (5-Minute Cached Admin Auth)"]
+    end
+
+    subgraph Daemon ["🦀 Privileged System Daemon (postureflow-daemon)"]
+        DISPATCHER["State Manager & Signal Dispatcher"]
+        VALIDATOR["Anti-Lockout Safety & Sanitization Engine"]
+        
+        subgraph AutonomousEngines ["⚡ Autonomous Context Engines"]
+            AUTOFLOW["Auto-Flow Network Watcher (SSID & Interface Classifier)"]
+            TRIGGERS["App-Aware Dynamic Triggers (Procfs Scanner & State Reverter)"]
+        end
+
+        subgraph SecurityEngine ["🛡️ Security & Auditing Engine"]
+            INSPECTOR["Live Port & Socket Inspector (/proc/net/)"]
+            SCORER["100-Point Posture Score Engine"]
+        end
+
+        subgraph HardwareEngine ["⚡ Hardware & Peripheral Controller"]
+            EPP_CTRL["CPU EPP Scaling Controller"]
+            USB_CTRL["BadUSB Defense Controller"]
+            BT_CTRL["Bluetooth Radio Controller"]
+            PWR_CTRL["Framework Battery & Profile Manager"]
+        end
+    end
+
+    subgraph KernelSpace ["🐧 Linux Kernel & Hardware Subsystems"]
+        SYSCTL["Kernel Parameters (/proc/sys/)"]
+        FIREWALL["Netfilter & UFW Firewall Engine"]
+        SYSFS_CPU["CPUFreq EPP Registers (/sys/devices/system/cpu/cpufreq/)"]
+        SYSFS_USB["USB Core Sysfs Registers (/sys/bus/usb/devices/)"]
+        RFKILL["RFKill Wireless Subsystem"]
+        FRAMEWORK_ACPI["Framework Laptop ACPI & Power Tunables"]
+    end
+
+    APPLET -->|D-Bus Calls| DBUS
+    GUI -->|D-Bus Calls| DBUS
+    CLI -->|D-Bus Calls| DBUS
+
+    DBUS -->|Authorize Caller| POLKIT
+    POLKIT -->|Authorized| DISPATCHER
+
+    DISPATCHER -->|Validate Config| VALIDATOR
+    DISPATCHER -.->|ProfileChanged Signal| APPLET
+    DISPATCHER -.->|ProfileChanged Signal| GUI
+
+    AUTOFLOW -->|Trigger Context Switch| DISPATCHER
+    TRIGGERS -->|Transient Posture & Auto-Revert| DISPATCHER
+
+    INSPECTOR -->|Socket Exposure Map| SCORER
+    SCORER -->|Audited Score & Telemetry| DISPATCHER
+
+    VALIDATOR --> EPP_CTRL
+    VALIDATOR --> USB_CTRL
+    VALIDATOR --> BT_CTRL
+    VALIDATOR --> PWR_CTRL
+
+    VALIDATOR -->|Apply sysctl| SYSCTL
+    VALIDATOR -->|Apply Rules| FIREWALL
+    EPP_CTRL -->|Energy Preference| SYSFS_CPU
+    USB_CTRL -->|Lockdown Default| SYSFS_USB
+    BT_CTRL -->|Toggle Radio| RFKILL
+    PWR_CTRL -->|Charge Limit| FRAMEWORK_ACPI
 ```
 
-### 5-Minute Cached Admin Authorization (`auth_admin_keep`)
+---
 
-Desktop profile switching and custom profile imports use Polkit's `auth_admin_keep` policy (matching `sudo`). When you switch profiles or import configurations from the desktop, you authenticate once with your password/fingerprint; subsequent changes over the next 5 minutes are applied instantly without interrupting your workflow.
+### Architectural Layers
+
+#### 1. Presentation & Interaction Layer
+* **COSMIC Panel Applet (`postureflow-applet`):** Native Freedesktop StatusNotifierItem (SNI) and DBusMenu provider running in the user session. It provides live symbolic iconography matching the desktop theme, one-click profile cycling, and desktop notification dispatching via `org.freedesktop.Notifications`.
+* **Floating Settings GUI & Security Cockpit (`postureflow-gui`):** Hardware-accelerated desktop window built with `egui`/`eframe`. Houses the real-time Security Cockpit, Live Port Inspector, Auto-Flow network manager, App Triggers editor, and tabbed Profile Designer with one-click TOML import/export.
+* **Terminal CLI (`postureflow`):** Fast, standalone command-line client with zero external dependencies and integrated Bash/Zsh tab-completions.
+
+#### 2. IPC & Authorization Boundary
+* **D-Bus System Bus (`io.github.mzia.PostureFlow`):** Asynchronous IPC bus managed with `zbus`. Exposes methods for profile switching, configuration queries, port blocking, and autonomous engine control. Emits the broadcast signal `ProfileChanged` to guarantee all frontends synchronize immediately.
+* **Polkit Security Authority (`org.freedesktop.PolicyKit1`):** Governs privileged mutations (`io.github.mzia.PostureFlow.set-profile`). Employs `auth_admin_keep` caching: prompts once on initial desktop profile switch or import, enabling seamless adjustments for the subsequent 5 minutes without nagging the user.
+
+#### 3. Privileged Daemon Core (`postureflow-daemon`)
+* **State Manager & Signal Dispatcher:** Holds the active profile in memory, applies runtime state transitions, and notifies subscribed clients over D-Bus upon posture mutation.
+* **Anti-Lockout Safety Engine:** Validates all configuration files against non-negotiable security invariants (SSH preservation, loopback guarantee, pipe-injection protection, eBPF sanitization).
+* **Autonomous Context Engines:**
+  - **Auto-Flow:** Watches NetworkManager D-Bus signals and network interface states to automatically adapt postures when roaming between trusted home Wi-Fi, corporate subnets, and untrusted coffee shop hotspots.
+  - **App-Aware Dynamic Triggers:** Sub-millisecond `/proc` comm scanner that detects target processes (e.g. Steam, Docker, VS Code) and applies temporary profile overrides. Captures baseline state and automatically reverts parameters when the process terminates.
+* **Security Cockpit & Socket Inspector:** Directly parses `/proc/net/{tcp,udp,tcp6,udp6}`, maps socket inodes to running PIDs/process names in `/proc/<pid>/fd`, evaluates exposure boundaries (Localhost vs Local Subnet vs Public WAN), and computes a 100-point security posture score.
+* **Deep Hardware Orchestrator:** Manages CPU Energy Performance Preference (`energy_performance_preference`) across all CPU cores, toggles kernel BadUSB protection (`authorized_default = 0`), commands Bluetooth radio states via `rfkill`, and controls Framework Laptop battery charging thresholds and thermal profiles.
+
+#### 4. Linux Kernel & Subsystem Enforcement
+* **Sysctl Subsystem (`/proc/sys/`):** Hardens kernel memory, network stacks, and security parameters (`kernel.yama.ptrace_scope`, `net.core.bpf_jit_harden`, `fs.inotify.max_user_watches`, `fs.suid_dumpable`).
+* **Netfilter & UFW:** Reconfigures inbound/outbound firewall rules, port whitelists, and interface bindings on the fly without breaking established connections.
+* **Kernel Sysfs & RFKill:** Directly writes to `/sys/devices/system/cpu/cpufreq/policy*/energy_performance_preference`, `/sys/bus/usb/devices/usb*/authorized_default`, and controls wireless radios.
+
+---
 
 ### D-Bus API Specification (`io.github.mzia.PostureFlow`)
 
@@ -170,6 +238,9 @@ Desktop profile switching and custom profile imports use Polkit's `auth_admin_ke
 | `SetAutoFlowEnabled`| Method | `(b) -> ()` | Enables or disables the autonomous network watcher daemon engine. |
 | `GetAutoFlowConfig` | Method | `() -> (s)` | Returns the active `autoflow.toml` configuration content. |
 | `SaveAutoFlowConfig`| Method | `(s) -> ()` | Updates and saves `/etc/postureflow/autoflow.toml`. |
+| `GetTriggersStatus` | Method | `() -> (b, s)` | Returns `(enabled, active_trigger_rule_name)`. |
+| `GetTriggersConfig` | Method | `() -> (s)` | Returns current App Triggers configuration TOML content. |
+| `SaveTriggersConfig`| Method | `(s) -> ()` | Updates and saves `/etc/postureflow/triggers.toml`. |
 | `ProfileChanged` | Signal | `(s)` | Broadcasts when a profile switch occurs. |
 
 ---
@@ -209,18 +280,22 @@ postureflow-applet --reset
 
 ## 🎨 Floating Desktop Settings GUI (`postureflow-gui`)
 
-`postureflow-gui` provides a rich, modern desktop window designed to open as a floating tile (`io.github.mzia.PostureFlow`):
+`postureflow-gui` provides a rich, hardware-accelerated desktop application designed to open as a floating tile (`io.github.mzia.PostureFlow`):
 
-* **Profile Sidebar:** Browse built-in profiles and custom configurations with live active badges.
-* **Factory Defaults Reset**: One-click **`🔄 Reset to Factory Defaults`** with safety confirmation dialog to immediately restore unmanaged out-of-the-box settings (UFW disabled, balanced power profile, battery 100%, and default 15-minute idle delay).
+* **Main Navigation Tabs:**
+  - **🛡️ Security Cockpit:** Real-time 100-point security score (0-100%, Grade A+ through F), live profile badge, system security state matrix (Firewall, Sysctl, Framework Power, BadUSB defense, Bluetooth stealth), and an itemized penalty audit breakdown.
+  - **🔌 Port Inspector:** Live socket auditor reading `/proc/net/*`, mapping listening sockets to running PIDs and process names, categorizing exposure levels (`Localhost`, `Local Subnet`, `Public / Insecure`), and providing one-click **`🚫 Block Port`** via UFW.
+  - **⚡ Auto-Flow (Network):** Autonomous network context manager. Visualizes active Wi-Fi SSID / Ethernet interfaces, prioritizes roaming rules, and provides a master toggle.
+  - **🎮 App Triggers:** Real-time process-triggered overrides (Steam gaming boost, Docker dev containers, office apps). Displays active trigger badges, rule list, and an in-app trigger rule creator with auto-reversion.
+  - **🏷️ Profiles Manager:** Sidebar of custom and built-in profiles, 1-click TOML import/export, factory defaults reset, safety verification, and a tabbed profile editor:
+    - **General:** Profile ID, Name, Description, and Category tags.
+    - **Firewall & Ports:** Default inbound/outbound policies, loopback isolation, interface whitelists, and an interactive port rules editor (TCP/UDP with custom descriptions).
+    - **Kernel & Sysctl:** Fine-tune sysctl parameters against safe whitelisted keys (`ptrace_scope`, `bpf_jit_harden`, `inotify.max_user_watches`, etc.) and system security limits (`nofile`).
+    - **Power & Framework:** Set battery charge thresholds (e.g. 80% for battery health), energy performance profiles, CPU EPP scaling register (`performance`, `balance_performance`, `balance_power`, `power`), BadUSB defense (`block_new_usb`), Bluetooth radio stealth (`disable_bluetooth`), and display sleep timeouts.
 * **1-Click Import & Export:**
-  - **`📥 Import Config`**: Pick any `.postureflow.toml` file to inspect, validate, and install.
+  - **`📥 Import Config`**: Pick any `.postureflow.toml` file to inspect, validate, and install into `/etc/postureflow/profiles.d/`.
   - **`📤 Export Config`**: Export custom or built-in profiles to share with teammates.
-* **Tabbed Visual Editor:**
-  - **General:** Profile ID, Name, Description, and Category tags.
-  - **Firewall:** Configure inbound/outbound default policies, loopback isolation, interface whitelists, and an interactive port table (add/remove TCP/UDP ports with custom descriptions).
-  - **Kernel & OS:** Fine-tune sysctl parameters against safe whitelisted keys (`ptrace_scope`, `bpf_jit_harden`, `inotify.max_user_watches`, etc.) and system security limits (`nofile`).
-  - **Framework & Power:** Set battery charge limits (e.g. 80% threshold for battery health), energy performance profile, and display sleep timeouts.
+* **Factory Defaults Reset**: One-click **`🔄 Reset to Factory Defaults`** with safety confirmation dialog to immediately restore unmanaged out-of-the-box settings (UFW disabled, balanced power profile, battery 100%, and default 15-minute idle delay).
 * **Interactive Safety Verification:** Test configuration safety in real time before saving or applying with the **`Test & Verify Safety`** button.
 * **Instant Activation:** Apply changes system-wide with **`⚡ Activate Profile`**.
 
@@ -323,8 +398,10 @@ postureflow/
 │   │   ├── mod.rs                   # Inspector module definition
 │   │   ├── ports.rs                 # Live socket inspection & process resolution
 │   │   └── score.rs                 # 100-point security scoring engine
-│   └── autoflow/                    # Autonomous context engine
-│       └── mod.rs                   # NetworkManager D-Bus / SSID event watcher
+│   ├── autoflow/                    # Autonomous network context engine
+│   │   └── mod.rs                   # NetworkManager D-Bus / SSID event watcher
+│   └── triggers/                    # App-aware dynamic process triggers engine
+│       └── mod.rs                   # Procfs scanner, rule engine & auto-revert state
 ├── data/
 │   ├── io.github.mzia.PostureFlow.desktop         # Floating GUI settings desktop entry
 │   ├── io.github.mzia.PostureFlow.Applet.desktop  # Top bar panel applet desktop entry
@@ -402,11 +479,16 @@ postureflow/
   - [x] Zero-dependency offline cargo sources generator (`scripts/generate_cargo_sources.py`)
   - [x] Automated builder & packager (`scripts/build_flatpak.sh` / `make flatpak`)
   - [x] Automated GitHub Actions Flatpak CI workflow (`.github/workflows/flatpak.yml`)
-- [x] **Phase 7: Autonomous Context & Security Cockpit**
+- [x] **Phase 7: Autonomous Context, Security Cockpit & Hardware Orchestration**
   - [x] Reactive Auto-Flow autonomous network watcher daemon
   - [x] Live socket inspector with process identification and exposure classification
   - [x] 100-point security posture scoring engine (Cockpit tab in GUI)
+  - [x] Deep Hardware Orchestration: CPU EPP scaling, BadUSB defense, and Bluetooth stealth
+  - [x] App-Aware Dynamic Triggers: Procfs `/proc` scanner, rule manager, and transparent auto-revert state machine
   - [x] Full codebase refactoring to pure PostureFlow architecture
+- [ ] **Phase 8: Circadian & Scheduled Posture Automation**
+  - [ ] Time-of-day / schedule-based posture transitions (e.g. Work mode 9am-5pm, Home mode evenings)
+  - [ ] Battery-critical emergency power & stealth fallback
 
 ---
 
