@@ -3,10 +3,13 @@
 [![CI Safety & D-Bus Tests](https://github.com/mzia/PostureFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/mzia/PostureFlow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Rust: 1.80+](https://img.shields.io/badge/Rust-1.80%2B-red.svg)](https://www.rust-lang.org)
-[![OS: Pop!_OS](https://img.shields.io/badge/OS-Pop!__OS%20%7C%20Ubuntu-orange.svg)](https://system76.com/pop)
+[![Swift: 5.9+](https://img.shields.io/badge/Swift-5.9%2B-orange.svg)](https://swift.org)
+[![OS: Pop!_OS / Ubuntu](https://img.shields.io/badge/Linux-Pop!__OS%20%7C%20Ubuntu-orange.svg)](https://system76.com/pop)
+[![OS: macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Ventura%2B-black.svg)](macos/README.md)
 [![Hardware: Framework Laptop](https://img.shields.io/badge/Hardware-Framework%20Laptop-black.svg)](https://frame.work)
 
-> **Dynamic security posture, hardware power, and lifestyle workflow orchestrator for Linux & Pop!_OS laptops.**
+> **Dynamic security posture, hardware power, and lifestyle workflow orchestrator for Linux & macOS.**
+
 
 `PostureFlow` dynamically bridges the gap between paranoid security, frictionless software engineering, and casual entertainment. Switch postures with a single command or status bar click without ever risking lockout from your laptop.
 
@@ -45,6 +48,18 @@ flatpak install --user dist/io.github.mzia.PostureFlow.flatpak
 # Run Flatpak application
 flatpak run io.github.mzia.PostureFlow
 ```
+
+### Option 4: macOS & Apple Silicon (SwiftUI MenuBarExtra)
+
+```bash
+cd macos
+swift build
+swift run postureflow --status
+# Or run the native menu bar extra app:
+swift run PostureFlowApp
+```
+For architecture and detailed setup, see the [macOS Documentation & Quickstart](macos/README.md).
+
 
 Now switch postures anytime:
 ```bash
