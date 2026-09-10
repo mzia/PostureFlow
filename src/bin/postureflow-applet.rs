@@ -246,6 +246,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         emit_profile_updated(&session_conn, &state).await;
                     }
 
+                    MenuAction::ToggleSchedule => {
+                        println!("[*] Toggling Circadian Schedule state...");
+                        let mut cfg = postureflow::schedule::load_schedule_config();
+                        cfg.enabled = !cfg.enabled;
+                        let _ = postureflow::schedule::save_schedule_config(&cfg);
+                        let notif_text = if cfg.enabled {
+                            "Circadian Schedule Enabled: Posture will dynamically adapt to time-of-day and battery levels."
+                        } else {
+                            "Circadian Schedule Disabled: Manual posture control holds."
+                        };
+                        daemon.send_notification(
+                            "PostureFlow Schedule",
+                            notif_text,
+                            "preferences-system-time-symbolic",
+                        ).await;
+                        emit_profile_updated(&session_conn, &state).await;
+                    }
+
                     MenuAction::OpenInspector => {
                         println!("[*] Launching postureflow-gui in Port Inspector view...");
                         let launched = std::process::Command::new("postureflow-gui")

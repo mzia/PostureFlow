@@ -6,3 +6,4 @@ pub mod config;
 pub mod inspector;
 pub mod autoflow;
 pub mod triggers;
+pub mod schedule;

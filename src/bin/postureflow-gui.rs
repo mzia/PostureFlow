@@ -6,6 +6,7 @@ use postureflow::config::{
 };
 use postureflow::inspector::{self, ListeningPort, PostureScoreReport};
 use postureflow::triggers::{self, TriggerRule, TriggersConfig};
+use postureflow::schedule::{self, CircadianConfig, ScheduleWindow};
 use postureflow::system;
 use std::collections::HashMap;
 
@@ -15,6 +16,7 @@ enum MainTab {
     Ports,
     AutoFlow,
     Triggers,
+    Schedule,
     Profiles,
 }
 
@@ -57,6 +59,15 @@ struct GuiApp {
     new_trigger_epp: String,
     new_trigger_comment: String,
 
+    // Circadian Schedule & Battery state
+    schedule_config: CircadianConfig,
+    new_sched_name: String,
+    new_sched_days: String,
+    new_sched_start: String,
+    new_sched_end: String,
+    new_sched_profile: String,
+    new_sched_comment: String,
+
     // Profile form inputs
     new_port_str: String,
     new_port_comment: String,
@@ -82,6 +93,8 @@ impl GuiApp {
                 initial_tab = MainTab::AutoFlow;
             } else if args.iter().any(|a| a == "triggers") {
                 initial_tab = MainTab::Triggers;
+            } else if args.iter().any(|a| a == "schedule" || a == "circadian") {
+                initial_tab = MainTab::Schedule;
             } else if args.iter().any(|a| a == "profiles") {
                 initial_tab = MainTab::Profiles;
             }
@@ -109,6 +122,13 @@ impl GuiApp {
             new_trigger_profile: "home".to_string(),
             new_trigger_epp: "performance".to_string(),
             new_trigger_comment: String::new(),
+            schedule_config: schedule::load_schedule_config(),
+            new_sched_name: String::new(),
+            new_sched_days: "Mon, Tue, Wed, Thu, Fri".to_string(),
+            new_sched_start: "09:00".to_string(),
+            new_sched_end: "17:00".to_string(),
+            new_sched_profile: "work".to_string(),
+            new_sched_comment: String::new(),
             new_port_str: "8080/tcp".to_string(),
             new_port_comment: "Web Development".to_string(),
             new_sysctl_key: "fs.inotify.max_user_watches".to_string(),
@@ -124,6 +144,7 @@ impl GuiApp {
         self.autoflow_config = autoflow::load_autoflow_config();
         self.active_network = autoflow::detect_active_networks();
         self.triggers_config = triggers::load_triggers_config();
+        self.schedule_config = schedule::load_schedule_config();
         if self.selected_index >= self.profiles.len() {
             self.selected_index = 0;
         }
@@ -295,6 +316,7 @@ impl eframe::App for GuiApp {
                     ui.selectable_value(&mut self.main_tab, MainTab::Ports, "🔌 Port Inspector");
                     ui.selectable_value(&mut self.main_tab, MainTab::AutoFlow, "⚡ Auto-Flow (Network)");
                     ui.selectable_value(&mut self.main_tab, MainTab::Triggers, "🎮 App Triggers");
+                    ui.selectable_value(&mut self.main_tab, MainTab::Schedule, "🕒 Schedule & Battery");
                     ui.selectable_value(&mut self.main_tab, MainTab::Profiles, "🏷️ Profiles Manager");
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -357,6 +379,7 @@ impl eframe::App for GuiApp {
             MainTab::Ports => self.render_ports_view(ui),
             MainTab::AutoFlow => self.render_autoflow_view(ui),
             MainTab::Triggers => self.render_triggers_view(ui),
+            MainTab::Schedule => self.render_schedule_view(ui),
             MainTab::Profiles => self.render_profiles_view(ui),
         });
     }
@@ -1025,7 +1048,274 @@ impl GuiApp {
         }
     }
 
-    // 5. PROFILES & SYSTEM SETTINGS VIEW (Standard Editor)
+    // 5. CIRCADIAN SCHEDULE & BATTERY VIEW
+    fn render_schedule_view(&mut self, ui: &mut egui::Ui) {
+        let now = schedule::get_current_local_time();
+        let battery = schedule::get_battery_status();
+        let decision = schedule::evaluate_schedule(&self.schedule_config, &now, &battery);
+
+        ui.horizontal(|ui| {
+            ui.heading("🕒 Circadian Schedule & Battery Fallback");
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let (btn_text, btn_color) = if self.schedule_config.enabled {
+                    ("SCHEDULE ENGINE: ACTIVE", Color32::from_rgb(80, 250, 123))
+                } else {
+                    ("SCHEDULE ENGINE: DISABLED", Color32::from_rgb(255, 100, 100))
+                };
+                if ui.button(RichText::new(btn_text).color(btn_color).strong()).clicked() {
+                    self.schedule_config.enabled = !self.schedule_config.enabled;
+                    let _ = schedule::save_schedule_config(&self.schedule_config);
+                }
+            });
+        });
+
+        ui.label(
+            RichText::new("Automate lifestyle posture transitions based on time-of-day and protect against sudden battery drainage.")
+                .color(Color32::from_rgb(160, 170, 195)),
+        );
+        ui.add_space(8.0);
+
+        // Live Telemetry Banner
+        egui::Frame::new()
+            .fill(Color32::from_rgb(20, 22, 30))
+            .inner_margin(12)
+            .corner_radius(CornerRadius::same(8))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("🕒 System Clock:").strong());
+                    ui.label(
+                        RichText::new(format!("{:02}:{:02} ({})", now.hour, now.minute, now.weekday_name()))
+                            .color(Color32::from_rgb(72, 185, 199))
+                            .strong(),
+                    );
+
+                    ui.add_space(20.0);
+
+                    ui.label(RichText::new("🔋 Battery:").strong());
+                    let bat_pct = battery.capacity_percent.unwrap_or(0);
+                    let bat_color = if bat_pct <= self.schedule_config.battery_emergency.threshold_percent && battery.is_discharging {
+                        Color32::from_rgb(255, 100, 100)
+                    } else if bat_pct <= 30 {
+                        Color32::from_rgb(246, 166, 35)
+                    } else {
+                        Color32::from_rgb(80, 250, 123)
+                    };
+                    ui.label(
+                        RichText::new(format!("{}% [{}]", bat_pct, battery.status))
+                            .color(bat_color)
+                            .strong(),
+                    );
+                    if battery.on_ac_power {
+                        ui.label(RichText::new("⚡ AC Plugged").color(Color32::from_rgb(246, 166, 35)).small());
+                    } else {
+                        ui.label(RichText::new("🔋 On Battery").color(Color32::from_rgb(140, 150, 175)).small());
+                    }
+                });
+
+                ui.add_space(8.0);
+                match decision {
+                    Some(schedule::ScheduleDecision::BatteryEmergency { ref rule_name, ref target_profile, battery_percent, .. }) => {
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new("🚨 CURRENT STATUS:").strong().color(Color32::from_rgb(255, 85, 85)));
+                            ui.label(
+                                RichText::new(format!("{} ({}% <= {}%) ➔ Fallback: [{}]",
+                                    rule_name, battery_percent, self.schedule_config.battery_emergency.threshold_percent, target_profile.to_uppercase()))
+                                    .color(Color32::from_rgb(255, 120, 120))
+                                    .strong(),
+                            );
+                        });
+                    }
+                    Some(schedule::ScheduleDecision::ScheduledShift { ref rule_name, ref target_profile, ref window }) => {
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new("⏰ ACTIVE WINDOW:").strong().color(Color32::from_rgb(72, 185, 199)));
+                            ui.label(
+                                RichText::new(format!("{} ({}) ➔ Target Posture: [{}]", rule_name, window, target_profile.to_uppercase()))
+                                    .color(Color32::from_rgb(80, 250, 123))
+                                    .strong(),
+                            );
+                        });
+                    }
+                    None => {
+                        ui.label(
+                            RichText::new("✓ No schedule window matches current time. Baseline manual posture is active.")
+                                .color(Color32::from_rgb(140, 150, 175)),
+                        );
+                    }
+                }
+            });
+
+        ui.add_space(14.0);
+
+        // Battery Emergency Settings Group
+        ui.group(|ui| {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("🔋 Battery-Critical Emergency Fallback").strong().color(Color32::from_rgb(246, 166, 35)));
+                ui.checkbox(&mut self.schedule_config.battery_emergency.enabled, "Enable Emergency Mode");
+            });
+
+            if self.schedule_config.battery_emergency.enabled {
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    ui.label("Trigger Threshold (%):");
+                    ui.add(egui::Slider::new(&mut self.schedule_config.battery_emergency.threshold_percent, 5..=30).text("%"));
+
+                    ui.add_space(16.0);
+                    ui.label("Emergency Posture:");
+                    egui::ComboBox::from_id_salt("emergency_profile_select")
+                        .selected_text(&self.schedule_config.battery_emergency.target_profile)
+                        .show_ui(ui, |ui| {
+                            for prof in ["travel", "home", "work", "dev"] {
+                                ui.selectable_value(&mut self.schedule_config.battery_emergency.target_profile, prof.to_string(), prof);
+                            }
+                        });
+                });
+
+                ui.horizontal(|ui| {
+                    let mut force_epp = self.schedule_config.battery_emergency.force_cpu_epp.is_some();
+                    if ui.checkbox(&mut force_epp, "Force CPU EPP to 'power' (max preservation)").changed() {
+                        self.schedule_config.battery_emergency.force_cpu_epp = if force_epp { Some("power".to_string()) } else { None };
+                    }
+                    ui.checkbox(&mut self.schedule_config.battery_emergency.disable_bluetooth, "Shut down Bluetooth radio");
+                    ui.checkbox(&mut self.schedule_config.battery_emergency.auto_recover_on_ac, "Auto-recover on AC power plug");
+                });
+            }
+        });
+
+        ui.add_space(14.0);
+
+        // Scheduled Windows List
+        ui.heading("📋 Scheduled Time Windows");
+        let mut delete_index = None;
+
+        egui::ScrollArea::vertical().max_height(180.0).show(ui, |ui| {
+            for (idx, win) in self.schedule_config.schedules.iter().enumerate() {
+                egui::Frame::new()
+                    .fill(Color32::from_rgb(28, 31, 42))
+                    .inner_margin(10)
+                    .corner_radius(CornerRadius::same(6))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(&win.name).strong().color(Color32::from_rgb(72, 185, 199)));
+                            ui.label(format!("➔ [{}]", win.target_profile.to_uppercase()));
+                            ui.label(RichText::new(format!("⏰ {} - {}", win.start_time, win.end_time)).color(Color32::from_rgb(246, 166, 35)).small());
+                            let days_display = if win.days.is_empty() { "* (Daily)".to_string() } else { win.days.join(", ") };
+                            ui.label(RichText::new(format!("Days: {}", days_display)).color(Color32::from_rgb(140, 150, 175)).small());
+
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if ui.button(RichText::new("🗑").color(Color32::from_rgb(255, 100, 100))).clicked() {
+                                    delete_index = Some(idx);
+                                }
+                            });
+                        });
+                        if let Some(ref c) = win.comment {
+                            ui.label(RichText::new(c).small().color(Color32::from_rgb(160, 170, 195)));
+                        }
+                    });
+                ui.add_space(4.0);
+            }
+        });
+
+        if let Some(idx) = delete_index {
+            self.schedule_config.schedules.remove(idx);
+            let _ = schedule::save_schedule_config(&self.schedule_config);
+        }
+
+        ui.add_space(14.0);
+
+        // Add Window Form
+        ui.group(|ui| {
+            ui.label(RichText::new("➕ Add New Schedule Window").strong());
+            ui.horizontal(|ui| {
+                ui.label("Name:");
+                ui.add(egui::TextEdit::singleline(&mut self.new_sched_name).desired_width(160.0));
+                ui.label("Start (HH:MM):");
+                ui.add(egui::TextEdit::singleline(&mut self.new_sched_start).desired_width(50.0));
+                ui.label("End (HH:MM):");
+                ui.add(egui::TextEdit::singleline(&mut self.new_sched_end).desired_width(50.0));
+                ui.label("Target:");
+                egui::ComboBox::from_id_salt("new_sched_target_select")
+                    .selected_text(&self.new_sched_profile)
+                    .show_ui(ui, |ui| {
+                        for p in ["work", "home", "dev", "travel"] {
+                            ui.selectable_value(&mut self.new_sched_profile, p.to_string(), p);
+                        }
+                    });
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Days:");
+                ui.add(egui::TextEdit::singleline(&mut self.new_sched_days).desired_width(180.0));
+                if ui.button("Workdays").clicked() {
+                    self.new_sched_days = "Mon, Tue, Wed, Thu, Fri".to_string();
+                }
+                if ui.button("Weekends").clicked() {
+                    self.new_sched_days = "Sat, Sun".to_string();
+                }
+                if ui.button("Daily").clicked() {
+                    self.new_sched_days = "*".to_string();
+                }
+                ui.label("Description:");
+                ui.add(egui::TextEdit::singleline(&mut self.new_sched_comment).desired_width(160.0));
+            });
+
+            ui.add_space(4.0);
+            if ui.button(RichText::new("➕ Add Window").color(Color32::from_rgb(80, 250, 123)).strong()).clicked() {
+                if !self.new_sched_name.trim().is_empty() && schedule::TimeOfDay::parse(&self.new_sched_start).is_some() && schedule::TimeOfDay::parse(&self.new_sched_end).is_some() {
+                    let days: Vec<String> = self.new_sched_days
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+
+                    let comment = if self.new_sched_comment.trim().is_empty() {
+                        None
+                    } else {
+                        Some(self.new_sched_comment.trim().to_string())
+                    };
+
+                    self.schedule_config.schedules.push(ScheduleWindow {
+                        name: self.new_sched_name.trim().to_string(),
+                        days,
+                        start_time: self.new_sched_start.trim().to_string(),
+                        end_time: self.new_sched_end.trim().to_string(),
+                        target_profile: self.new_sched_profile.clone(),
+                        comment,
+                    });
+
+                    let _ = schedule::save_schedule_config(&self.schedule_config);
+                    self.new_sched_name.clear();
+                    self.new_sched_comment.clear();
+                    self.status_message = Some(("New schedule window added successfully.".to_string(), false));
+                } else {
+                    self.status_message = Some(("Please specify a valid window name and HH:MM times (e.g. 09:00 to 17:00).".to_string(), true));
+                }
+            }
+        });
+
+        ui.add_space(14.0);
+        if ui
+            .button(
+                RichText::new("💾 Save Schedule & Battery Configuration")
+                    .color(Color32::BLACK)
+                    .strong(),
+            )
+            .clicked()
+        {
+            match schedule::save_schedule_config(&self.schedule_config) {
+                Ok(()) => {
+                    self.status_message = Some((
+                        format!("Schedule & Battery configuration saved successfully to {}.", schedule::SYSTEM_SCHEDULE_FILE),
+                        false,
+                    ));
+                }
+                Err(e) => {
+                    self.status_message = Some((format!("Failed to save schedule configuration: {}", e), true));
+                }
+            }
+        }
+    }
+
+    // 6. PROFILES & SYSTEM SETTINGS VIEW (Standard Editor)
     fn render_profiles_view(&mut self, ui: &mut egui::Ui) {
         // Left Profiles Sidebar
         egui::Panel::left("profiles_sidebar")

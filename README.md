@@ -135,6 +135,7 @@ flowchart TD
         subgraph AutonomousEngines ["⚡ Autonomous Context Engines"]
             AUTOFLOW["Auto-Flow Network Watcher (SSID & Interface Classifier)"]
             TRIGGERS["App-Aware Dynamic Triggers (Procfs Scanner & State Reverter)"]
+            SCHEDULE["Circadian Schedule & Battery Fallback Engine"]
         end
 
         subgraph SecurityEngine ["🛡️ Security & Auditing Engine"]
@@ -172,6 +173,7 @@ flowchart TD
 
     AUTOFLOW -->|Trigger Context Switch| DISPATCHER
     TRIGGERS -->|Transient Posture & Auto-Revert| DISPATCHER
+    SCHEDULE -->|Scheduled Transition & Battery Critical| DISPATCHER
 
     INSPECTOR -->|Socket Exposure Map| SCORER
     SCORER -->|Audited Score & Telemetry| DISPATCHER
@@ -195,7 +197,7 @@ flowchart TD
 
 #### 1. Presentation & Interaction Layer
 * **COSMIC Panel Applet (`postureflow-applet`):** Native Freedesktop StatusNotifierItem (SNI) and DBusMenu provider running in the user session. It provides live symbolic iconography matching the desktop theme, one-click profile cycling, and desktop notification dispatching via `org.freedesktop.Notifications`.
-* **Floating Settings GUI & Security Cockpit (`postureflow-gui`):** Hardware-accelerated desktop window built with `egui`/`eframe`. Houses the real-time Security Cockpit, Live Port Inspector, Auto-Flow network manager, App Triggers editor, and tabbed Profile Designer with one-click TOML import/export.
+* **Floating Settings GUI & Security Cockpit (`postureflow-gui`):** Hardware-accelerated desktop window built with `egui`/`eframe`. Houses the real-time Security Cockpit, Live Port Inspector, Auto-Flow network manager, App Triggers editor, Circadian Schedule & Battery manager, and tabbed Profile Designer with one-click TOML import/export.
 * **Terminal CLI (`postureflow`):** Fast, standalone command-line client with zero external dependencies and integrated Bash/Zsh tab-completions.
 
 #### 2. IPC & Authorization Boundary
@@ -208,6 +210,7 @@ flowchart TD
 * **Autonomous Context Engines:**
   - **Auto-Flow:** Watches NetworkManager D-Bus signals and network interface states to automatically adapt postures when roaming between trusted home Wi-Fi, corporate subnets, and untrusted coffee shop hotspots.
   - **App-Aware Dynamic Triggers:** Sub-millisecond `/proc` comm scanner that detects target processes (e.g. Steam, Docker, VS Code) and applies temporary profile overrides. Captures baseline state and automatically reverts parameters when the process terminates.
+  - **Circadian & Scheduled Flow:** Time-of-day automation rules with weekday/weekend time windows, paired with a battery-critical emergency fallback engine (<15% forces power EPP, Bluetooth down, and stealth mode with auto-recovery on AC).
 * **Security Cockpit & Socket Inspector:** Directly parses `/proc/net/{tcp,udp,tcp6,udp6}`, maps socket inodes to running PIDs/process names in `/proc/<pid>/fd`, evaluates exposure boundaries (Localhost vs Local Subnet vs Public WAN), and computes a 100-point security posture score.
 * **Deep Hardware Orchestrator:** Manages CPU Energy Performance Preference (`energy_performance_preference`) across all CPU cores, toggles kernel BadUSB protection (`authorized_default = 0`), commands Bluetooth radio states via `rfkill`, and controls Framework Laptop battery charging thresholds and thermal profiles.
 
@@ -241,6 +244,9 @@ flowchart TD
 | `GetTriggersStatus` | Method | `() -> (b, s)` | Returns `(enabled, active_trigger_rule_name)`. |
 | `GetTriggersConfig` | Method | `() -> (s)` | Returns current App Triggers configuration TOML content. |
 | `SaveTriggersConfig`| Method | `(s) -> ()` | Updates and saves `/etc/postureflow/triggers.toml`. |
+| `GetScheduleStatus`| Method | `() -> (b, s, u, b)`| Returns `(enabled, active_rule_name, battery_percent, is_on_ac)`. |
+| `GetScheduleConfig`| Method | `() -> (s)` | Returns current Circadian Schedule configuration TOML content. |
+| `SaveScheduleConfig`| Method | `(s) -> ()` | Updates and saves `/etc/postureflow/schedule.toml`. |
 | `ProfileChanged` | Signal | `(s)` | Broadcasts when a profile switch occurs. |
 
 ---
@@ -287,6 +293,7 @@ postureflow-applet --reset
   - **🔌 Port Inspector:** Live socket auditor reading `/proc/net/*`, mapping listening sockets to running PIDs and process names, categorizing exposure levels (`Localhost`, `Local Subnet`, `Public / Insecure`), and providing one-click **`🚫 Block Port`** via UFW.
   - **⚡ Auto-Flow (Network):** Autonomous network context manager. Visualizes active Wi-Fi SSID / Ethernet interfaces, prioritizes roaming rules, and provides a master toggle.
   - **🎮 App Triggers:** Real-time process-triggered overrides (Steam gaming boost, Docker dev containers, office apps). Displays active trigger badges, rule list, and an in-app trigger rule creator with auto-reversion.
+  - **🕒 Schedule & Battery:** Circadian time-of-day automation rules (weekday vs. weekend, midnight crossover), live system battery & power telemetry, and configurable emergency power fallback (auto-lockdown at <15% battery, EPP `power`, Bluetooth disable, and auto-recovery on AC).
   - **🏷️ Profiles Manager:** Sidebar of custom and built-in profiles, 1-click TOML import/export, factory defaults reset, safety verification, and a tabbed profile editor:
     - **General:** Profile ID, Name, Description, and Category tags.
     - **Firewall & Ports:** Default inbound/outbound policies, loopback isolation, interface whitelists, and an interactive port rules editor (TCP/UDP with custom descriptions).
@@ -400,8 +407,10 @@ postureflow/
 │   │   └── score.rs                 # 100-point security scoring engine
 │   ├── autoflow/                    # Autonomous network context engine
 │   │   └── mod.rs                   # NetworkManager D-Bus / SSID event watcher
-│   └── triggers/                    # App-aware dynamic process triggers engine
-│       └── mod.rs                   # Procfs scanner, rule engine & auto-revert state
+│   ├── triggers/                    # App-aware dynamic process triggers engine
+│   │   └── mod.rs                   # Procfs scanner, rule engine & auto-revert state
+│   └── schedule/                    # Circadian schedule & battery emergency fallback engine
+│       └── mod.rs                   # Time-of-day matcher, sysfs battery monitor & rules
 ├── data/
 │   ├── io.github.mzia.PostureFlow.desktop         # Floating GUI settings desktop entry
 │   ├── io.github.mzia.PostureFlow.Applet.desktop  # Top bar panel applet desktop entry
@@ -455,7 +464,7 @@ The complete development roadmap, itemized release deliverables, and upcoming in
 | **5** | **Floating Desktop Settings GUI** | ✅ Completed | egui/eframe floating window, tabbed profile editor, safety tester |
 | **6** | **Flatpak Sandboxing & Distribution** | ✅ Completed | Flathub-compliant manifest, portals, offline vendored cargo sources |
 | **7** | **Autonomous Context & Hardware Orchestration** | ✅ Completed | Auto-Flow, App Triggers, Port Inspector, Posture Score, CPU EPP & BadUSB |
-| **8** | **Circadian & Scheduled Flow** | ⏳ In Progress | Time-of-day automation, calendar sync, emergency power fallback |
+| **8** | **Circadian & Scheduled Flow** | ✅ Completed | Time-of-day automation, midnight crossover, emergency battery fallback |
 | **9** | **Enterprise Fleet Sync & Attestation** | 🔮 Planned | Cryptographic posture attestation, Tailscale/WireGuard policy sync |
 
 👉 **Read the complete feature checklists and milestone details in the [PostureFlow Wiki: Project Roadmap](https://github.com/mzia/PostureFlow/wiki/Project-Roadmap).**

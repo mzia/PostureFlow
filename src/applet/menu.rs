@@ -12,6 +12,7 @@ pub enum MenuAction {
     ResetDefaults,
     ToggleAutoFlow,
     ToggleAppTriggers,
+    ToggleSchedule,
     OpenGui,
     OpenInspector,
     Quit,
@@ -149,6 +150,29 @@ impl DbusMenu {
                 );
                 Some(props)
             }
+            17 => {
+                let sched_cfg = crate::schedule::load_schedule_config();
+                let now = crate::schedule::get_current_local_time();
+                let battery = crate::schedule::get_battery_status();
+                let decision = crate::schedule::evaluate_schedule(&sched_cfg, &now, &battery);
+                let status_lbl = if !sched_cfg.enabled {
+                    "🕒 Schedule: DISABLED (Click to Enable)".to_string()
+                } else if let Some(crate::schedule::ScheduleDecision::BatteryEmergency { battery_percent, ref target_profile, .. }) = decision {
+                    format!("🔋 Battery Critical ({}%): EMERGENCY [{}]", battery_percent, target_profile.to_uppercase())
+                } else if let Some(crate::schedule::ScheduleDecision::ScheduledShift { ref rule_name, ref target_profile, .. }) = decision {
+                    format!("🕒 Schedule: ACTIVE [{} ➔ {}]", rule_name, target_profile.to_uppercase())
+                } else {
+                    let bat_str = battery.capacity_percent.map(|c| format!("{}%", c)).unwrap_or_else(|| "N/A".to_string());
+                    format!("🕒 Schedule: ACTIVE ({:02}:{:02}, Bat: {})", now.hour, now.minute, bat_str)
+                };
+                props.insert("label".to_string(), Value::from(status_lbl));
+                props.insert("toggle-type".to_string(), Value::from("checkmark"));
+                props.insert(
+                    "toggle-state".to_string(),
+                    Value::from(if sched_cfg.enabled { 1i32 } else { 0i32 }),
+                );
+                Some(props)
+            }
             21 => {
                 props.insert(
                     "label".to_string(),
@@ -178,7 +202,10 @@ impl DbusMenu {
                 Some(props)
             }
             31 => {
-                props.insert("label".to_string(), Value::from("✕ Quit Applet"));
+                props.insert(
+                    "label".to_string(),
+                    Value::from("❌ Quit PostureFlow Applet"),
+                );
                 Some(props)
             }
             _ => None,
@@ -194,13 +221,13 @@ impl DbusMenu {
         _recursion_depth: i32,
         _property_names: Vec<String>,
     ) -> (u32, MenuItemNode) {
-        let (active, revision) = {
-            let state = self.state.read().await;
-            (state.active_profile, state.menu_revision)
+        let (revision, active) = {
+            let st = self.state.read().await;
+            (st.menu_revision, st.active_profile)
         };
 
         let root_props = Self::item_props(0, active).unwrap_or_default();
-        let child_ids = [1, 2, 3, 10, 11, 12, 13, 15, 16, 20, 21, 24, 22, 23, 30, 31];
+        let child_ids = [1, 2, 3, 10, 11, 12, 13, 15, 16, 17, 20, 21, 24, 22, 23, 30, 31];
         let mut children = Vec::with_capacity(child_ids.len());
 
         for id in child_ids {
@@ -266,6 +293,7 @@ impl DbusMenu {
                 13 => Some(MenuAction::SwitchProfile(Profile::Travel)),
                 15 => Some(MenuAction::ToggleAutoFlow),
                 16 => Some(MenuAction::ToggleAppTriggers),
+                17 => Some(MenuAction::ToggleSchedule),
                 21 => Some(MenuAction::ShowStatus),
                 24 => Some(MenuAction::OpenInspector),
                 22 => Some(MenuAction::ResetDefaults),

@@ -514,6 +514,16 @@ case "${1:-}" in
         fi
         exit 0
         ;;
+    -c|--schedule|--circadian)
+        if [ -x "$SCRIPT_DIR/../target/release/postureflow-daemon" ]; then
+            "$SCRIPT_DIR/../target/release/postureflow-daemon" --schedule
+        elif command -v postureflow-daemon >/dev/null 2>&1; then
+            postureflow-daemon --schedule
+        else
+            cat /etc/postureflow/schedule.toml 2>/dev/null || true
+        fi
+        exit 0
+        ;;
     --test)
         SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
         TEST_SCRIPT="$SCRIPT_DIR/../tests/test_safety.sh"
@@ -543,6 +553,11 @@ case "${1:-}" in
         echo "  sudo postureflow --dev       # Coding & debugging"
         echo "  sudo postureflow --travel    # Lockdown for public Wi-Fi (alias: --secure)"
         echo "  sudo postureflow --reset     # Reset to Pop!_OS factory defaults"
+        echo "  postureflow --score          # Real-time Security Cockpit score"
+        echo "  postureflow --ports          # Inspect listening ports & processes"
+        echo "  postureflow --autoflow       # Check network detection rules"
+        echo "  postureflow --triggers       # Check app-aware dynamic trigger status"
+        echo "  postureflow --schedule       # Circadian time-of-day schedule & battery"
         exit 0
         ;;
 esac

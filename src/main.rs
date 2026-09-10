@@ -1,4 +1,6 @@
 use std::error::Error;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use clap::Parser;
 use postureflow::profile::Profile;
 use postureflow::dbus::{PostureFlowService, DBUS_INTERFACE, DBUS_PATH};
@@ -6,6 +8,7 @@ use postureflow::system;
 use postureflow::inspector::{ports, PostureScoreReport};
 use postureflow::autoflow;
 use postureflow::triggers;
+use postureflow::schedule;
 
 #[derive(Parser, Debug)]
 #[command(name = "postureflow-daemon")]
@@ -64,6 +67,10 @@ struct Cli {
     /// Display App-Aware Dynamic Triggers rules and running app status
     #[arg(long)]
     triggers: bool,
+
+    /// Display Circadian Schedule and battery status report
+    #[arg(long, short = 'c')]
+    schedule: bool,
 
     /// Reset all settings to Pop!_OS factory defaults
     #[arg(long)]
@@ -177,6 +184,54 @@ async fn main() -> Result<(), Box<dyn Error>> {
             for (k, v) in &r.boost_sysctl {
                 println!("      Sysctl Boost:       {} = {}", k, v);
             }
+            if let Some(ref c) = r.comment {
+                println!("      Description:        {}", c);
+            }
+        }
+        println!();
+        return Ok(());
+    }
+
+    if cli.schedule {
+        let cfg = schedule::load_schedule_config();
+        let now = schedule::get_current_local_time();
+        let battery = schedule::get_battery_status();
+        let decision = schedule::evaluate_schedule(&cfg, &now, &battery);
+
+        println!("\n=== PostureFlow Circadian & Scheduled Flow ===");
+        println!("Schedule Engine Enabled:  {}", if cfg.enabled { "YES" } else { "NO" });
+        println!("Local Time:               {:02}:{:02} ({})", now.hour, now.minute, now.weekday_name());
+        println!("Battery Status:           {}% ({}, AC Online: {})",
+            battery.capacity_percent.map(|c| c.to_string()).unwrap_or_else(|| "N/A".to_string()),
+            battery.status,
+            if battery.on_ac_power { "YES" } else { "NO" }
+        );
+        println!("Emergency Fallback (<{}%): Target [{}] (CPU EPP: {}, BT off: {})",
+            cfg.battery_emergency.threshold_percent,
+            cfg.battery_emergency.target_profile.to_uppercase(),
+            cfg.battery_emergency.force_cpu_epp.as_deref().unwrap_or("default"),
+            if cfg.battery_emergency.disable_bluetooth { "YES" } else { "NO" }
+        );
+
+        match decision {
+            Some(schedule::ScheduleDecision::BatteryEmergency { ref rule_name, ref target_profile, battery_percent, .. }) => {
+                println!("Active Scheduled State:   🚨 {} (Battery {}% <= {}%) ➔ [{}]",
+                    rule_name, battery_percent, cfg.battery_emergency.threshold_percent, target_profile.to_uppercase());
+            }
+            Some(schedule::ScheduleDecision::ScheduledShift { ref rule_name, ref target_profile, ref window }) => {
+                println!("Active Scheduled State:   ⏰ {} ({}) ➔ [{}]",
+                    rule_name, window, target_profile.to_uppercase());
+            }
+            None => {
+                println!("Active Scheduled State:   None (No window active / Manual profile holds)");
+            }
+        }
+
+        println!("\nConfigured Schedule Windows ({}):", cfg.schedules.len());
+        for (i, r) in cfg.schedules.iter().enumerate() {
+            let days_str = if r.days.is_empty() { "*".to_string() } else { r.days.join(", ") };
+            println!("  [{}] {} ({}) [{} - {}] ➔ Profile: [{}]",
+                i + 1, r.name, days_str, r.start_time, r.end_time, r.target_profile.to_uppercase());
             if let Some(ref c) = r.comment {
                 println!("      Description:        {}", c);
             }
@@ -308,9 +363,13 @@ async fn run_daemon(session_bus: bool) -> Result<(), Box<dyn Error>> {
         }
     });
 
+    // Shared atomic flag indicating if an app trigger is currently active
+    let app_trigger_active = Arc::new(AtomicBool::new(false));
+
     // Spawn reactive App-Aware Dynamic Triggers background monitor
     let service_triggers = service.clone();
     let conn_triggers = connection.clone();
+    let app_trigger_flag_triggers = app_trigger_active.clone();
     tokio::spawn(async move {
         println!("[+] App-Aware Dynamic Triggers background monitor activated.");
         let mut session = triggers::TriggerSession::default();
@@ -322,7 +381,7 @@ async fn run_daemon(session_bus: bool) -> Result<(), Box<dyn Error>> {
 
             if !cfg.enabled {
                 if session.active_rule_name.is_some() {
-                    revert_trigger_session(&mut session, &service_triggers, &conn_triggers).await;
+                    revert_trigger_session(&mut session, &service_triggers, &conn_triggers, &app_trigger_flag_triggers).await;
                 }
                 continue;
             }
@@ -332,18 +391,126 @@ async fn run_daemon(session_bus: bool) -> Result<(), Box<dyn Error>> {
 
             match (session.active_rule_name.clone(), matched) {
                 (None, Some(m)) => {
-                    engage_trigger_session(&mut session, &m, &service_triggers, &conn_triggers).await;
+                    engage_trigger_session(&mut session, &m, &service_triggers, &conn_triggers, &app_trigger_flag_triggers).await;
                 }
                 (Some(active_name), Some(m)) => {
                     if active_name != m.rule_name {
-                        revert_trigger_session(&mut session, &service_triggers, &conn_triggers).await;
-                        engage_trigger_session(&mut session, &m, &service_triggers, &conn_triggers).await;
+                        revert_trigger_session(&mut session, &service_triggers, &conn_triggers, &app_trigger_flag_triggers).await;
+                        engage_trigger_session(&mut session, &m, &service_triggers, &conn_triggers, &app_trigger_flag_triggers).await;
                     }
                 }
                 (Some(_), None) => {
-                    revert_trigger_session(&mut session, &service_triggers, &conn_triggers).await;
+                    revert_trigger_session(&mut session, &service_triggers, &conn_triggers, &app_trigger_flag_triggers).await;
                 }
                 (None, None) => {}
+            }
+        }
+    });
+
+    // Spawn reactive Circadian Schedule & Battery background monitor
+    let service_sched = service.clone();
+    let conn_sched = connection.clone();
+    let app_trigger_flag_sched = app_trigger_active.clone();
+    tokio::spawn(async move {
+        println!("[+] Circadian Schedule & Battery background monitor activated.");
+        let mut last_applied_profile = String::new();
+        let mut was_emergency = false;
+
+        loop {
+            let cfg = schedule::load_schedule_config();
+            let interval = cfg.check_interval_seconds.max(5);
+            tokio::time::sleep(tokio::time::Duration::from_secs(interval)).await;
+
+            if !cfg.enabled {
+                continue;
+            }
+
+            let now = schedule::get_current_local_time();
+            let battery = schedule::get_battery_status();
+            let decision = schedule::evaluate_schedule(&cfg, &now, &battery);
+
+            match decision {
+                Some(schedule::ScheduleDecision::BatteryEmergency {
+                    ref rule_name,
+                    ref target_profile,
+                    battery_percent,
+                    ref cpu_epp,
+                    disable_bluetooth,
+                }) => {
+                    let current = service_sched.get_active_profile_str().await;
+                    if !was_emergency || current != *target_profile {
+                        println!(
+                            "[!] Battery Critical ({}%): {} ➔ Activating Emergency Fallback [{}]",
+                            battery_percent,
+                            rule_name,
+                            target_profile.to_uppercase()
+                        );
+                        if let Err(e) = system::apply_profile_by_id(target_profile) {
+                            eprintln!("[-] Battery Emergency: Failed to apply profile {}: {}", target_profile, e);
+                        } else {
+                            if let Some(ref epp) = cpu_epp {
+                                let _ = system::apply_cpu_epp(epp);
+                            }
+                            if disable_bluetooth {
+                                let _ = system::apply_bluetooth(false);
+                            }
+                            was_emergency = true;
+                            last_applied_profile = target_profile.clone();
+                            service_sched.set_active_profile_str(target_profile).await;
+
+                            let _ = conn_sched.emit_signal(
+                                Option::<&str>::None,
+                                DBUS_PATH,
+                                DBUS_INTERFACE,
+                                "ProfileChanged",
+                                &(&target_profile),
+                            ).await;
+                        }
+                    }
+                }
+                Some(schedule::ScheduleDecision::ScheduledShift {
+                    ref rule_name,
+                    ref target_profile,
+                    ref window,
+                }) => {
+                    if was_emergency {
+                        println!("[+] Battery Emergency cleared (AC connected or charged). Resuming schedule.");
+                        was_emergency = false;
+                    }
+
+                    // Only apply scheduled shifts if an app trigger isn't actively boosting
+                    if !app_trigger_flag_sched.load(Ordering::SeqCst) {
+                        let current = service_sched.get_active_profile_str().await;
+                        if target_profile != &current && target_profile != &last_applied_profile {
+                            println!(
+                                "[*] Circadian Schedule: '{}' ({}) ➔ Auto-activating [{}]",
+                                rule_name,
+                                window,
+                                target_profile.to_uppercase()
+                            );
+                            if let Err(e) = system::apply_profile_by_id(target_profile) {
+                                eprintln!("[-] Schedule: Failed to apply profile {}: {}", target_profile, e);
+                            } else {
+                                last_applied_profile = target_profile.clone();
+                                service_sched.set_active_profile_str(target_profile).await;
+
+                                let _ = conn_sched.emit_signal(
+                                    Option::<&str>::None,
+                                    DBUS_PATH,
+                                    DBUS_INTERFACE,
+                                    "ProfileChanged",
+                                    &(&target_profile),
+                                ).await;
+                            }
+                        }
+                    }
+                }
+                None => {
+                    if was_emergency {
+                        println!("[+] Battery Emergency cleared. Resuming normal operations.");
+                        was_emergency = false;
+                    }
+                }
             }
         }
     });
@@ -359,11 +526,13 @@ async fn engage_trigger_session(
     m: &triggers::MatchedTrigger,
     service: &PostureFlowService,
     conn: &zbus::Connection,
+    app_flag: &Arc<AtomicBool>,
 ) {
     let current_profile = service.get_active_profile_str().await;
     session.baseline_profile = Some(current_profile.clone());
     session.baseline_cpu_epp = system::get_cpu_epp();
     session.active_rule_name = Some(m.rule_name.clone());
+    app_flag.store(true, Ordering::SeqCst);
 
     // Save baseline sysctls before applying boost
     for key in m.boost_sysctl.keys() {
@@ -411,6 +580,7 @@ async fn revert_trigger_session(
     session: &mut triggers::TriggerSession,
     service: &PostureFlowService,
     conn: &zbus::Connection,
+    app_flag: &Arc<AtomicBool>,
 ) {
     if let Some(ref name) = session.active_rule_name {
         println!("[*] App Trigger: '{}' processes exited. Restoring baseline posture...", name);
@@ -448,6 +618,7 @@ async fn revert_trigger_session(
     }
     session.baseline_profile = None;
     session.active_rule_name = None;
+    app_flag.store(false, Ordering::SeqCst);
     println!("[+] App Trigger: Baseline posture restored.");
 }
 

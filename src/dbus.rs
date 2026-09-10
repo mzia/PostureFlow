@@ -261,6 +261,43 @@ impl PostureFlowService {
         Ok(())
     }
 
+    /// Returns the active Circadian Schedule and Battery status: (enabled, active_rule_name, battery_percent, is_on_ac)
+    async fn get_schedule_status(&self) -> fdo::Result<(bool, String, u32, bool)> {
+        let cfg = crate::schedule::load_schedule_config();
+        let now = crate::schedule::get_current_local_time();
+        let battery = crate::schedule::get_battery_status();
+        let matched = crate::schedule::evaluate_schedule(&cfg, &now, &battery);
+        let active = match matched {
+            Some(crate::schedule::ScheduleDecision::BatteryEmergency { rule_name, .. }) => rule_name,
+            Some(crate::schedule::ScheduleDecision::ScheduledShift { rule_name, .. }) => rule_name,
+            None => "none".to_string(),
+        };
+        let bat_pct = battery.capacity_percent.unwrap_or(0);
+        Ok((cfg.enabled, active, bat_pct, battery.on_ac_power))
+    }
+
+    /// Returns current Circadian Schedule configuration TOML string
+    async fn get_schedule_config(&self) -> fdo::Result<String> {
+        let cfg = crate::schedule::load_schedule_config();
+        toml::to_string_pretty(&cfg)
+            .map_err(|e| fdo::Error::Failed(format!("TOML serialize error: {}", e)))
+    }
+
+    /// Updates Circadian Schedule configuration: requires Polkit authorization
+    async fn save_schedule_config(
+        &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+        toml_str: String,
+    ) -> fdo::Result<()> {
+        check_posture_auth(conn, hdr.sender()).await?;
+        let cfg: crate::schedule::CircadianConfig = toml::from_str(&toml_str)
+            .map_err(|e| fdo::Error::InvalidArgs(format!("Invalid TOML syntax: {}", e)))?;
+        crate::schedule::save_schedule_config(&cfg)
+            .map_err(|e| fdo::Error::Failed(e))?;
+        Ok(())
+    }
+
     /// D-Bus Signal emitted whenever the profile changes
     #[zbus(signal)]
     async fn profile_changed(ctxt: &zbus::SignalContext<'_>, new_profile: &str) -> zbus::Result<()>;
