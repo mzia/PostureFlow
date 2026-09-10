@@ -427,6 +427,10 @@ case "${1:-}" in
         echo ""
         echo "Management & Actions:"
         echo "  -i, --status    Display current security posture, active rules & ports"
+        echo "  --score         Calculate and display Real-Time Security Posture Score (0-100%)"
+        echo "  --ports         Inspect actively listening sockets and process ownership"
+        echo "  --autoflow      Display Auto-Flow network detection and configuration"
+        echo "  --triggers      Display App-Aware Dynamic Triggers rules and active app status"
         echo "  --test          Run automated anti-lockout & integrity test suite"
         echo "  -r, --reset     Reset all settings back to Pop!_OS factory defaults"
         echo "  --default       Alias for --reset"
@@ -497,6 +501,16 @@ case "${1:-}" in
             postureflow-daemon --autoflow
         else
             nmcli -t -f TYPE,NAME,DEVICE con show --active
+        fi
+        exit 0
+        ;;
+    --triggers)
+        if [ -x "$SCRIPT_DIR/../target/release/postureflow-daemon" ]; then
+            "$SCRIPT_DIR/../target/release/postureflow-daemon" --triggers
+        elif command -v postureflow-daemon >/dev/null 2>&1; then
+            postureflow-daemon --triggers
+        else
+            cat /etc/postureflow/triggers.toml 2>/dev/null || true
         fi
         exit 0
         ;;

@@ -11,6 +11,7 @@ pub enum MenuAction {
     ShowStatus,
     ResetDefaults,
     ToggleAutoFlow,
+    ToggleAppTriggers,
     OpenGui,
     OpenInspector,
     Quit,
@@ -129,6 +130,25 @@ impl DbusMenu {
                 );
                 Some(props)
             }
+            16 => {
+                let triggers_cfg = crate::triggers::load_triggers_config();
+                let running = crate::triggers::scan_running_processes();
+                let matched = crate::triggers::evaluate_triggers(&triggers_cfg, &running);
+                let status_lbl = if !triggers_cfg.enabled {
+                    "🎮 App Triggers: DISABLED (Click to Enable)".to_string()
+                } else if let Some(m) = matched {
+                    format!("🎮 App Trigger: ACTIVE [{}]", m.rule_name)
+                } else {
+                    "🎮 App Triggers: ACTIVE (Watching Processes)".to_string()
+                };
+                props.insert("label".to_string(), Value::from(status_lbl));
+                props.insert("toggle-type".to_string(), Value::from("checkmark"));
+                props.insert(
+                    "toggle-state".to_string(),
+                    Value::from(if triggers_cfg.enabled { 1i32 } else { 0i32 }),
+                );
+                Some(props)
+            }
             21 => {
                 props.insert(
                     "label".to_string(),
@@ -180,7 +200,7 @@ impl DbusMenu {
         };
 
         let root_props = Self::item_props(0, active).unwrap_or_default();
-        let child_ids = [1, 2, 3, 10, 11, 12, 13, 15, 20, 21, 24, 22, 23, 30, 31];
+        let child_ids = [1, 2, 3, 10, 11, 12, 13, 15, 16, 20, 21, 24, 22, 23, 30, 31];
         let mut children = Vec::with_capacity(child_ids.len());
 
         for id in child_ids {
@@ -245,6 +265,7 @@ impl DbusMenu {
                 12 => Some(MenuAction::SwitchProfile(Profile::Dev)),
                 13 => Some(MenuAction::SwitchProfile(Profile::Travel)),
                 15 => Some(MenuAction::ToggleAutoFlow),
+                16 => Some(MenuAction::ToggleAppTriggers),
                 21 => Some(MenuAction::ShowStatus),
                 24 => Some(MenuAction::OpenInspector),
                 22 => Some(MenuAction::ResetDefaults),

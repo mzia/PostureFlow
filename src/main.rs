@@ -5,6 +5,7 @@ use postureflow::dbus::{PostureFlowService, DBUS_INTERFACE, DBUS_PATH};
 use postureflow::system;
 use postureflow::inspector::{ports, PostureScoreReport};
 use postureflow::autoflow;
+use postureflow::triggers;
 
 #[derive(Parser, Debug)]
 #[command(name = "postureflow-daemon")]
@@ -59,6 +60,10 @@ struct Cli {
     /// Display Auto-Flow network detection and configuration
     #[arg(long)]
     autoflow: bool,
+
+    /// Display App-Aware Dynamic Triggers rules and running app status
+    #[arg(long)]
+    triggers: bool,
 
     /// Reset all settings to Pop!_OS factory defaults
     #[arg(long)]
@@ -131,6 +136,50 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 "Unknown".to_string()
             };
             println!("  [{}] {} ➔ Profile: [{}] ({})", i + 1, trigger, r.profile.to_uppercase(), r.comment.as_deref().unwrap_or("-"));
+        }
+        println!();
+        return Ok(());
+    }
+
+    if cli.triggers {
+        let cfg = triggers::load_triggers_config();
+        let running = triggers::scan_running_processes();
+        let matched = triggers::evaluate_triggers(&cfg, &running);
+
+        println!("\n=== PostureFlow App-Aware Dynamic Triggers ===");
+        println!("Trigger Engine Enabled:   {}", if cfg.enabled { "YES" } else { "NO" });
+        println!("Check Interval:           {} seconds", cfg.check_interval_seconds);
+        if let Some(ref m) = matched {
+            println!("Active Dynamic Trigger:   🚨 {} (Matched: {})", m.rule_name, m.matched_processes.join(", "));
+            if let Some(ref p) = m.target_profile {
+                println!("  • Target Posture:       [{}]", p.to_uppercase());
+            }
+            if let Some(ref epp) = m.boost_cpu_epp {
+                println!("  • CPU EPP Boost:        {}", epp);
+            }
+            for (k, v) in &m.boost_sysctl {
+                println!("  • Sysctl Boost:         {} = {}", k, v);
+            }
+        } else {
+            println!("Active Dynamic Trigger:   None (Baseline profile active)");
+        }
+
+        println!("\nConfigured Application Rules ({}):", cfg.rules.len());
+        for (i, r) in cfg.rules.iter().enumerate() {
+            println!("  [{}] {}", i + 1, r.name);
+            println!("      Watched Binaries:   {}", r.process_names.join(", "));
+            if let Some(ref p) = r.target_profile {
+                println!("      Target Profile:     [{}]", p.to_uppercase());
+            }
+            if let Some(ref epp) = r.boost_cpu_epp {
+                println!("      CPU EPP Boost:      {}", epp);
+            }
+            for (k, v) in &r.boost_sysctl {
+                println!("      Sysctl Boost:       {} = {}", k, v);
+            }
+            if let Some(ref c) = r.comment {
+                println!("      Description:        {}", c);
+            }
         }
         println!();
         return Ok(());
@@ -259,10 +308,147 @@ async fn run_daemon(session_bus: bool) -> Result<(), Box<dyn Error>> {
         }
     });
 
+    // Spawn reactive App-Aware Dynamic Triggers background monitor
+    let service_triggers = service.clone();
+    let conn_triggers = connection.clone();
+    tokio::spawn(async move {
+        println!("[+] App-Aware Dynamic Triggers background monitor activated.");
+        let mut session = triggers::TriggerSession::default();
+
+        loop {
+            let cfg = triggers::load_triggers_config();
+            let interval = cfg.check_interval_seconds.max(1);
+            tokio::time::sleep(tokio::time::Duration::from_secs(interval)).await;
+
+            if !cfg.enabled {
+                if session.active_rule_name.is_some() {
+                    revert_trigger_session(&mut session, &service_triggers, &conn_triggers).await;
+                }
+                continue;
+            }
+
+            let running = triggers::scan_running_processes();
+            let matched = triggers::evaluate_triggers(&cfg, &running);
+
+            match (session.active_rule_name.clone(), matched) {
+                (None, Some(m)) => {
+                    engage_trigger_session(&mut session, &m, &service_triggers, &conn_triggers).await;
+                }
+                (Some(active_name), Some(m)) => {
+                    if active_name != m.rule_name {
+                        revert_trigger_session(&mut session, &service_triggers, &conn_triggers).await;
+                        engage_trigger_session(&mut session, &m, &service_triggers, &conn_triggers).await;
+                    }
+                }
+                (Some(_), None) => {
+                    revert_trigger_session(&mut session, &service_triggers, &conn_triggers).await;
+                }
+                (None, None) => {}
+            }
+        }
+    });
+
     tokio::signal::ctrl_c().await?;
     println!("\n[*] Shutting down postureflow-daemon...");
     drop(connection);
     Ok(())
+}
+
+async fn engage_trigger_session(
+    session: &mut triggers::TriggerSession,
+    m: &triggers::MatchedTrigger,
+    service: &PostureFlowService,
+    conn: &zbus::Connection,
+) {
+    let current_profile = service.get_active_profile_str().await;
+    session.baseline_profile = Some(current_profile.clone());
+    session.baseline_cpu_epp = system::get_cpu_epp();
+    session.active_rule_name = Some(m.rule_name.clone());
+
+    // Save baseline sysctls before applying boost
+    for key in m.boost_sysctl.keys() {
+        if let Some(val) = triggers::read_sysctl_value(key) {
+            session.baseline_sysctls.insert(key.clone(), val);
+        }
+    }
+
+    println!(
+        "[*] App Trigger: '{}' activated (detected: {})",
+        m.rule_name,
+        m.matched_processes.join(", ")
+    );
+
+    // 1. Boost CPU EPP if requested
+    if let Some(ref epp) = m.boost_cpu_epp {
+        let _ = system::apply_cpu_epp(epp);
+    }
+
+    // 2. Boost sysctls
+    for (k, v) in &m.boost_sysctl {
+        let _ = triggers::apply_sysctl_override(k, v);
+    }
+
+    // 3. Switch profile if requested
+    if let Some(ref target) = m.target_profile {
+        if *target != current_profile {
+            if let Err(e) = system::apply_profile_by_id(target) {
+                eprintln!("[-] App Trigger: Failed to switch to profile {}: {}", target, e);
+            } else {
+                service.set_active_profile_str(target).await;
+                let _ = conn.emit_signal(
+                    Option::<&str>::None,
+                    DBUS_PATH,
+                    DBUS_INTERFACE,
+                    "ProfileChanged",
+                    &(&target),
+                ).await;
+            }
+        }
+    }
+}
+
+async fn revert_trigger_session(
+    session: &mut triggers::TriggerSession,
+    service: &PostureFlowService,
+    conn: &zbus::Connection,
+) {
+    if let Some(ref name) = session.active_rule_name {
+        println!("[*] App Trigger: '{}' processes exited. Restoring baseline posture...", name);
+    }
+
+    // 1. Revert sysctls
+    for (k, v) in &session.baseline_sysctls {
+        let _ = triggers::apply_sysctl_override(k, v);
+    }
+    session.baseline_sysctls.clear();
+
+    // 2. Revert CPU EPP
+    if let Some(ref epp) = session.baseline_cpu_epp {
+        let _ = system::apply_cpu_epp(epp);
+    }
+    session.baseline_cpu_epp = None;
+
+    // 3. Revert profile if baseline was different
+    if let Some(ref base) = session.baseline_profile {
+        let current = service.get_active_profile_str().await;
+        if *base != current {
+            if let Err(e) = system::apply_profile_by_id(base) {
+                eprintln!("[-] App Trigger: Failed to revert to profile {}: {}", base, e);
+            } else {
+                service.set_active_profile_str(base).await;
+                let _ = conn.emit_signal(
+                    Option::<&str>::None,
+                    DBUS_PATH,
+                    DBUS_INTERFACE,
+                    "ProfileChanged",
+                    &(&base),
+                ).await;
+            }
+        }
+    }
+    session.baseline_profile = None;
+    session.active_rule_name = None;
+    println!("[+] App Trigger: Baseline posture restored.");
 }
 
 #[cfg(test)]

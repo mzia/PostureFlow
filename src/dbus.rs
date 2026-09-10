@@ -230,6 +230,37 @@ impl PostureFlowService {
         Ok(())
     }
 
+    /// Returns the active Triggers status: (enabled, active_trigger_rule_name)
+    async fn get_triggers_status(&self) -> fdo::Result<(bool, String)> {
+        let cfg = crate::triggers::load_triggers_config();
+        let running = crate::triggers::scan_running_processes();
+        let matched = crate::triggers::evaluate_triggers(&cfg, &running);
+        let active = matched.map(|m| m.rule_name).unwrap_or_else(|| "none".to_string());
+        Ok((cfg.enabled, active))
+    }
+
+    /// Returns current Triggers configuration TOML string
+    async fn get_triggers_config(&self) -> fdo::Result<String> {
+        let cfg = crate::triggers::load_triggers_config();
+        toml::to_string_pretty(&cfg)
+            .map_err(|e| fdo::Error::Failed(format!("TOML serialize error: {}", e)))
+    }
+
+    /// Updates Triggers configuration: requires Polkit authorization
+    async fn save_triggers_config(
+        &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+        toml_str: String,
+    ) -> fdo::Result<()> {
+        check_posture_auth(conn, hdr.sender()).await?;
+        let cfg: crate::triggers::TriggersConfig = toml::from_str(&toml_str)
+            .map_err(|e| fdo::Error::InvalidArgs(format!("Invalid TOML syntax: {}", e)))?;
+        crate::triggers::save_triggers_config(&cfg)
+            .map_err(|e| fdo::Error::Failed(e))?;
+        Ok(())
+    }
+
     /// D-Bus Signal emitted whenever the profile changes
     #[zbus(signal)]
     async fn profile_changed(ctxt: &zbus::SignalContext<'_>, new_profile: &str) -> zbus::Result<()>;

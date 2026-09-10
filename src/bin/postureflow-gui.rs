@@ -5,6 +5,7 @@ use postureflow::config::{
     PeripheralsConfig, ProfileConfig, ProfileMetadata, SecurityLimitsConfig,
 };
 use postureflow::inspector::{self, ListeningPort, PostureScoreReport};
+use postureflow::triggers::{self, TriggerRule, TriggersConfig};
 use postureflow::system;
 use std::collections::HashMap;
 
@@ -13,6 +14,7 @@ enum MainTab {
     Cockpit,
     Ports,
     AutoFlow,
+    Triggers,
     Profiles,
 }
 
@@ -47,6 +49,14 @@ struct GuiApp {
     new_rule_profile: String,
     new_rule_comment: String,
 
+    // App Triggers state
+    triggers_config: TriggersConfig,
+    new_trigger_name: String,
+    new_trigger_procs: String,
+    new_trigger_profile: String,
+    new_trigger_epp: String,
+    new_trigger_comment: String,
+
     // Profile form inputs
     new_port_str: String,
     new_port_comment: String,
@@ -70,6 +80,8 @@ impl GuiApp {
                 initial_tab = MainTab::Ports;
             } else if args.iter().any(|a| a == "autoflow") {
                 initial_tab = MainTab::AutoFlow;
+            } else if args.iter().any(|a| a == "triggers") {
+                initial_tab = MainTab::Triggers;
             } else if args.iter().any(|a| a == "profiles") {
                 initial_tab = MainTab::Profiles;
             }
@@ -91,6 +103,12 @@ impl GuiApp {
             new_rule_ssid: String::new(),
             new_rule_profile: "home".to_string(),
             new_rule_comment: String::new(),
+            triggers_config: triggers::load_triggers_config(),
+            new_trigger_name: String::new(),
+            new_trigger_procs: String::new(),
+            new_trigger_profile: "home".to_string(),
+            new_trigger_epp: "performance".to_string(),
+            new_trigger_comment: String::new(),
             new_port_str: "8080/tcp".to_string(),
             new_port_comment: "Web Development".to_string(),
             new_sysctl_key: "fs.inotify.max_user_watches".to_string(),
@@ -105,6 +123,7 @@ impl GuiApp {
         self.listening_ports = inspector::ports::scan_listening_ports();
         self.autoflow_config = autoflow::load_autoflow_config();
         self.active_network = autoflow::detect_active_networks();
+        self.triggers_config = triggers::load_triggers_config();
         if self.selected_index >= self.profiles.len() {
             self.selected_index = 0;
         }
@@ -275,6 +294,7 @@ impl eframe::App for GuiApp {
                     ui.selectable_value(&mut self.main_tab, MainTab::Cockpit, "🛡️ Security Cockpit");
                     ui.selectable_value(&mut self.main_tab, MainTab::Ports, "🔌 Port Inspector");
                     ui.selectable_value(&mut self.main_tab, MainTab::AutoFlow, "⚡ Auto-Flow (Network)");
+                    ui.selectable_value(&mut self.main_tab, MainTab::Triggers, "🎮 App Triggers");
                     ui.selectable_value(&mut self.main_tab, MainTab::Profiles, "🏷️ Profiles Manager");
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -336,6 +356,7 @@ impl eframe::App for GuiApp {
             MainTab::Cockpit => self.render_cockpit_view(ui),
             MainTab::Ports => self.render_ports_view(ui),
             MainTab::AutoFlow => self.render_autoflow_view(ui),
+            MainTab::Triggers => self.render_triggers_view(ui),
             MainTab::Profiles => self.render_profiles_view(ui),
         });
     }
@@ -804,7 +825,207 @@ impl GuiApp {
         }
     }
 
-    // 4. PROFILES & SYSTEM SETTINGS VIEW (Standard Editor)
+    // 4. APP-AWARE DYNAMIC TRIGGERS VIEW
+    fn render_triggers_view(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(8.0);
+        ui.heading("🎮 App-Aware Dynamic Triggers");
+        ui.label(
+            RichText::new(
+                "Temporarily adapt system posture (governor, CPU EPP, and kernel parameters) when specific applications launch.",
+            )
+            .color(Color32::from_rgb(160, 170, 195)),
+        );
+        ui.add_space(12.0);
+
+        // Status & Active Detection Card
+        let running_procs = triggers::scan_running_processes();
+        let matched = triggers::evaluate_triggers(&self.triggers_config, &running_procs);
+
+        egui::Frame::new()
+            .fill(Color32::from_rgb(30, 33, 44))
+            .stroke(Stroke::new(1.0, Color32::from_rgb(48, 54, 72)))
+            .corner_radius(CornerRadius::same(10))
+            .inner_margin(16)
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut self.triggers_config.enabled, RichText::new("Enable App-Aware Dynamic Triggers").strong());
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let status_text = if !self.triggers_config.enabled {
+                            "Status: DISABLED"
+                        } else if matched.is_some() {
+                            "Status: ACTIVE OVERRIDE ENGAGED"
+                        } else {
+                            "Status: WATCHING (Idle)"
+                        };
+                        let status_clr = if !self.triggers_config.enabled {
+                            Color32::from_rgb(160, 170, 195)
+                        } else if matched.is_some() {
+                            Color32::from_rgb(80, 250, 123)
+                        } else {
+                            Color32::from_rgb(72, 185, 199)
+                        };
+                        ui.label(RichText::new(status_text).color(status_clr).strong());
+                    });
+                });
+
+                ui.add_space(8.0);
+                if let Some(ref m) = matched {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new("Active Match:").strong());
+                        ui.label(RichText::new(&m.rule_name).color(Color32::from_rgb(80, 250, 123)).strong());
+                        ui.label(format!("(Detected: {})", m.matched_processes.join(", ")));
+                    });
+                    if let Some(ref target) = m.target_profile {
+                        ui.label(format!("➔ Target Posture Override: [{}]", target.to_uppercase()));
+                    }
+                    if let Some(ref epp) = m.boost_cpu_epp {
+                        ui.label(format!("➔ Dynamic CPU EPP: {}", epp));
+                    }
+                    for (k, v) in &m.boost_sysctl {
+                        ui.label(format!("➔ Dynamic Sysctl: {} = {}", k, v));
+                    }
+                } else {
+                    ui.label(
+                        RichText::new("✓ No trigger processes currently active. Baseline system posture is engaged.")
+                            .color(Color32::from_rgb(140, 150, 175)),
+                    );
+                }
+            });
+
+        ui.add_space(16.0);
+
+        // Rules List
+        ui.heading("📋 Configured Trigger Rules");
+        let mut delete_index = None;
+
+        egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
+            for (idx, rule) in self.triggers_config.rules.iter().enumerate() {
+                egui::Frame::new()
+                    .fill(Color32::from_rgb(28, 31, 42))
+                    .inner_margin(10)
+                    .corner_radius(CornerRadius::same(6))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(&rule.name).strong().color(Color32::from_rgb(72, 185, 199)));
+                            if let Some(ref target) = rule.target_profile {
+                                ui.label(format!("➔ [{}]", target.to_uppercase()));
+                            }
+                            if let Some(ref epp) = rule.boost_cpu_epp {
+                                ui.label(RichText::new(format!("EPP: {}", epp)).color(Color32::from_rgb(246, 166, 35)).small());
+                            }
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if ui.button(RichText::new("🗑").color(Color32::from_rgb(255, 100, 100))).clicked() {
+                                    delete_index = Some(idx);
+                                }
+                            });
+                        });
+                        ui.label(
+                            RichText::new(format!("Binaries: {}", rule.process_names.join(", ")))
+                                .small()
+                                .color(Color32::from_rgb(140, 150, 175)),
+                        );
+                        if let Some(ref c) = rule.comment {
+                            ui.label(RichText::new(c).small().color(Color32::from_rgb(160, 170, 195)));
+                        }
+                    });
+                ui.add_space(4.0);
+            }
+        });
+
+        if let Some(idx) = delete_index {
+            self.triggers_config.rules.remove(idx);
+            let _ = triggers::save_triggers_config(&self.triggers_config);
+        }
+
+        ui.add_space(16.0);
+
+        // Add Rule Form
+        ui.group(|ui| {
+            ui.label(RichText::new("➕ Add New Trigger Rule").strong());
+            ui.horizontal(|ui| {
+                ui.label("Rule Name:");
+                ui.add(egui::TextEdit::singleline(&mut self.new_trigger_name).desired_width(180.0));
+                ui.label("Target Profile:");
+                ui.add(egui::TextEdit::singleline(&mut self.new_trigger_profile).desired_width(70.0));
+                ui.label("CPU EPP:");
+                ui.add(egui::TextEdit::singleline(&mut self.new_trigger_epp).desired_width(90.0));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Watched Binaries (comma-separated):");
+                ui.add(egui::TextEdit::singleline(&mut self.new_trigger_procs).desired_width(320.0));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Description:");
+                ui.add(egui::TextEdit::singleline(&mut self.new_trigger_comment).desired_width(300.0));
+
+                if ui.button(RichText::new("Add Rule").strong()).clicked() {
+                    let name = self.new_trigger_name.trim().to_string();
+                    let procs: Vec<String> = self.new_trigger_procs
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+
+                    if !name.is_empty() && !procs.is_empty() {
+                        let target_prof = if self.new_trigger_profile.trim().is_empty() {
+                            None
+                        } else {
+                            Some(self.new_trigger_profile.trim().to_lowercase())
+                        };
+                        let boost_epp = if self.new_trigger_epp.trim().is_empty() {
+                            None
+                        } else {
+                            Some(self.new_trigger_epp.trim().to_lowercase())
+                        };
+                        let comment = if self.new_trigger_comment.trim().is_empty() {
+                            None
+                        } else {
+                            Some(self.new_trigger_comment.trim().to_string())
+                        };
+
+                        self.triggers_config.rules.push(TriggerRule {
+                            name,
+                            process_names: procs,
+                            target_profile: target_prof,
+                            boost_cpu_epp: boost_epp,
+                            boost_sysctl: HashMap::new(),
+                            comment,
+                        });
+
+                        let _ = triggers::save_triggers_config(&self.triggers_config);
+                        self.new_trigger_name.clear();
+                        self.new_trigger_procs.clear();
+                        self.new_trigger_comment.clear();
+                        self.status_message = Some(("New App Trigger rule added.".to_string(), false));
+                    }
+                }
+            });
+        });
+
+        ui.add_space(16.0);
+        if ui
+            .button(
+                RichText::new("💾 Save Triggers Configuration")
+                    .color(Color32::BLACK)
+                    .strong(),
+            )
+            .clicked()
+        {
+            match triggers::save_triggers_config(&self.triggers_config) {
+                Ok(path) => {
+                    self.status_message = Some((
+                        format!("Triggers configuration saved successfully to {}.", path.display()),
+                        false,
+                    ));
+                }
+                Err(e) => {
+                    self.status_message = Some((format!("Failed to save triggers configuration: {}", e), true));
+                }
+            }
+        }
+    }
+
+    // 5. PROFILES & SYSTEM SETTINGS VIEW (Standard Editor)
     fn render_profiles_view(&mut self, ui: &mut egui::Ui) {
         // Left Profiles Sidebar
         egui::Panel::left("profiles_sidebar")

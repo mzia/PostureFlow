@@ -228,6 +228,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         emit_profile_updated(&session_conn, &state).await;
                     }
 
+                    MenuAction::ToggleAppTriggers => {
+                        println!("[*] Toggling App-Aware Triggers state...");
+                        let mut cfg = postureflow::triggers::load_triggers_config();
+                        cfg.enabled = !cfg.enabled;
+                        let _ = postureflow::triggers::save_triggers_config(&cfg);
+                        let notif_text = if cfg.enabled {
+                            "App Triggers Enabled: Posture will dynamically adapt to games and dev tools."
+                        } else {
+                            "App Triggers Disabled: Automatic process watching disengaged."
+                        };
+                        daemon.send_notification(
+                            "PostureFlow App Triggers",
+                            notif_text,
+                            "applications-games-symbolic",
+                        ).await;
+                        emit_profile_updated(&session_conn, &state).await;
+                    }
+
                     MenuAction::OpenInspector => {
                         println!("[*] Launching postureflow-gui in Port Inspector view...");
                         let launched = std::process::Command::new("postureflow-gui")

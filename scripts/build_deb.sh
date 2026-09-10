@@ -23,18 +23,16 @@ PKG_NAME="postureflow"
 DIST_DIR="$REPO_ROOT/dist"
 STAGE_DIR="$REPO_ROOT/target/debian/${PKG_NAME}_${VERSION}_${ARCH}"
 
-# 1. Build Rust release binary if not present
-echo "[*] Ensuring Rust release binaries are compiled..."
-if [ ! -f "$REPO_ROOT/target/release/postureflow-daemon" ] || [ ! -f "$REPO_ROOT/target/release/postureflow-applet" ] || [ ! -f "$REPO_ROOT/target/release/postureflow-gui" ]; then
-    if command -v cargo >/dev/null 2>&1; then
-        cargo build --release --manifest-path "$REPO_ROOT/Cargo.toml"
-    elif [ -f "$HOME/.cargo/env" ]; then
-        source "$HOME/.cargo/env"
-        cargo build --release --manifest-path "$REPO_ROOT/Cargo.toml"
-    else
-        echo -e "${RED}[-] cargo not found. Please install Rust toolchain first.${NC}"
-        exit 1
-    fi
+# 1. Build Rust release binaries
+echo "[*] Compiling latest Rust release binaries..."
+if command -v cargo >/dev/null 2>&1; then
+    cargo build --release --manifest-path "$REPO_ROOT/Cargo.toml"
+elif [ -f "$HOME/.cargo/env" ]; then
+    source "$HOME/.cargo/env"
+    cargo build --release --manifest-path "$REPO_ROOT/Cargo.toml"
+else
+    echo -e "${RED}[-] cargo not found. Please install Rust toolchain first.${NC}"
+    exit 1
 fi
 
 # 2. Prepare staging directory
