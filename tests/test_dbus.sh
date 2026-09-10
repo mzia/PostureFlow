@@ -81,6 +81,22 @@ if [[ "$VAL_RES" != *"(true,"* ]]; then
 fi
 echo "    -> Output: Successfully validated and sanitized custom profile"
 
+echo "[*] Calling GetPostureScore()..."
+SCORE_RES=$(gdbus call --session --dest io.github.mzia.PostureFlow --object-path /io/github/mzia/PostureFlow --method io.github.mzia.PostureFlow.GetPostureScore)
+echo "    -> Output: $SCORE_RES"
+if [[ "$SCORE_RES" != *"total_score"* ]]; then
+    echo "[-] Error: Expected total_score in GetPostureScore"
+    exit 1
+fi
+
+echo "[*] Calling GetListeningPorts()..."
+PORTS_RES=$(gdbus call --session --dest io.github.mzia.PostureFlow --object-path /io/github/mzia/PostureFlow --method io.github.mzia.PostureFlow.GetListeningPorts)
+echo "    -> Output: (Retrieved $(echo "$PORTS_RES" | wc -c) bytes of socket JSON)"
+
+echo "[*] Calling GetAutoFlowStatus()..."
+AF_RES=$(gdbus call --session --dest io.github.mzia.PostureFlow --object-path /io/github/mzia/PostureFlow --method io.github.mzia.PostureFlow.GetAutoFlowStatus)
+echo "    -> Output: $AF_RES"
+
 echo "[*] Verifying Backwards Compatibility: Calling GetActiveProfile() via legacy io.github.mzia.PopProfile..."
 LEGACY_PROFILE=$(gdbus call --session --dest io.github.mzia.PopProfile --object-path /io/github/mzia/PopProfile --method io.github.mzia.PopProfile.GetActiveProfile)
 echo "    -> Output: $LEGACY_PROFILE"

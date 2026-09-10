@@ -285,3 +285,14 @@ pub fn get_status_report() -> String {
         ufw_status
     )
 }
+
+pub fn block_port(port: u16, proto: &str) -> Result<(), String> {
+    if !is_privileged() {
+        return Err("Root privileges required to block ports in UFW".to_string());
+    }
+    let rule = format!("{}/{}", port, proto);
+    execute("ufw", &["deny", &rule, "comment", "Blocked via PostureFlow Port Inspector"])?;
+    let _ = execute("ufw", &["reload"]);
+    Ok(())
+}
+

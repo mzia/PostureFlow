@@ -10,7 +10,9 @@ pub enum MenuAction {
     SwitchProfile(Profile),
     ShowStatus,
     ResetDefaults,
+    ToggleAutoFlow,
     OpenGui,
+    OpenInspector,
     Quit,
 }
 
@@ -46,14 +48,15 @@ impl DbusMenu {
                 Some(props)
             }
             1 => {
-                props.insert("label".to_string(), Value::from("Pop! Profile Manager"));
+                props.insert("label".to_string(), Value::from("PostureFlow"));
                 props.insert("enabled".to_string(), Value::from(false));
                 Some(props)
             }
             2 => {
+                let score = crate::inspector::PostureScoreReport::compute();
                 props.insert(
                     "label".to_string(),
-                    Value::from(format!("Active: {}", active.display_name())),
+                    Value::from(format!("Active: {}  |  🛡️ Posture Score: {}% [{}]", active.display_name(), score.total_score, score.letter_grade)),
                 );
                 props.insert("enabled".to_string(), Value::from(false));
                 Some(props)
@@ -110,10 +113,33 @@ impl DbusMenu {
                 );
                 Some(props)
             }
+            15 => {
+                let autoflow_cfg = crate::autoflow::load_autoflow_config();
+                let net = crate::autoflow::detect_active_networks();
+                let status_lbl = if autoflow_cfg.enabled {
+                    format!("⚡ Auto-Flow: ACTIVE (SSID: {})", net.current_ssid.as_deref().unwrap_or(&net.primary_type))
+                } else {
+                    "⚡ Auto-Flow: DISABLED (Click to Enable)".to_string()
+                };
+                props.insert("label".to_string(), Value::from(status_lbl));
+                props.insert("toggle-type".to_string(), Value::from("checkmark"));
+                props.insert(
+                    "toggle-state".to_string(),
+                    Value::from(if autoflow_cfg.enabled { 1i32 } else { 0i32 }),
+                );
+                Some(props)
+            }
             21 => {
                 props.insert(
                     "label".to_string(),
                     Value::from("📊 View Profile & Power Status..."),
+                );
+                Some(props)
+            }
+            24 => {
+                props.insert(
+                    "label".to_string(),
+                    Value::from("🔌 Open Port Inspector & Cockpit..."),
                 );
                 Some(props)
             }
@@ -154,7 +180,7 @@ impl DbusMenu {
         };
 
         let root_props = Self::item_props(0, active).unwrap_or_default();
-        let child_ids = [1, 2, 3, 10, 11, 12, 13, 20, 21, 22, 23, 30, 31];
+        let child_ids = [1, 2, 3, 10, 11, 12, 13, 15, 20, 21, 24, 22, 23, 30, 31];
         let mut children = Vec::with_capacity(child_ids.len());
 
         for id in child_ids {
@@ -218,7 +244,9 @@ impl DbusMenu {
                 11 => Some(MenuAction::SwitchProfile(Profile::Work)),
                 12 => Some(MenuAction::SwitchProfile(Profile::Dev)),
                 13 => Some(MenuAction::SwitchProfile(Profile::Travel)),
+                15 => Some(MenuAction::ToggleAutoFlow),
                 21 => Some(MenuAction::ShowStatus),
+                24 => Some(MenuAction::OpenInspector),
                 22 => Some(MenuAction::ResetDefaults),
                 23 => Some(MenuAction::OpenGui),
                 31 => Some(MenuAction::Quit),

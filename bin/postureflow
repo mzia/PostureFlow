@@ -23,6 +23,7 @@ log_warn()    { echo -e "${YELLOW}[!]${NC} $1"; }
 log_error()   { echo -e "${RED}[-]${NC} $1"; }
 log_title()   { echo -e "\n${BOLD}${CYAN}=== $1 ===${NC}"; }
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 VERSION="1.0.0"
 STATE_FILE="/etc/postureflow-state"
 LEGACY_STATE_FILE="/etc/popos-security-profile"
@@ -470,6 +471,37 @@ case "${1:-}" in
             exit 1
         fi
         apply_travel_profile
+        exit 0
+        ;;
+    --score)
+        if [ -x "$SCRIPT_DIR/../target/release/postureflow-daemon" ]; then
+            "$SCRIPT_DIR/../target/release/postureflow-daemon" --score
+        elif command -v postureflow-daemon >/dev/null 2>&1; then
+            postureflow-daemon --score
+        else
+            log_error "postureflow-daemon binary required for security cockpit scoring"
+            exit 1
+        fi
+        exit 0
+        ;;
+    --ports)
+        if [ -x "$SCRIPT_DIR/../target/release/postureflow-daemon" ]; then
+            "$SCRIPT_DIR/../target/release/postureflow-daemon" --ports
+        elif command -v postureflow-daemon >/dev/null 2>&1; then
+            postureflow-daemon --ports
+        else
+            ss -tulpn
+        fi
+        exit 0
+        ;;
+    --autoflow)
+        if [ -x "$SCRIPT_DIR/../target/release/postureflow-daemon" ]; then
+            "$SCRIPT_DIR/../target/release/postureflow-daemon" --autoflow
+        elif command -v postureflow-daemon >/dev/null 2>&1; then
+            postureflow-daemon --autoflow
+        else
+            nmcli -t -f TYPE,NAME,DEVICE con show --active
+        fi
         exit 0
         ;;
     --test)

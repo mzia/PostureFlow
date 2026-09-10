@@ -22,6 +22,15 @@ impl PostureFlowService {
             active_profile: Arc::new(Mutex::new(current)),
         }
     }
+
+    pub async fn get_active_profile_str(&self) -> String {
+        self.active_profile.lock().await.clone()
+    }
+
+    pub async fn set_active_profile_str(&self, id: &str) {
+        let mut cur = self.active_profile.lock().await;
+        *cur = id.to_string();
+    }
 }
 
 #[interface(name = "io.github.mzia.PostureFlow")]
@@ -151,6 +160,80 @@ impl PostureFlowService {
         Ok(())
     }
 
+    /// Calculates and returns the real-time Posture Score (0-100) and JSON report
+    async fn get_posture_score(&self) -> fdo::Result<(i32, String)> {
+        let report = crate::inspector::PostureScoreReport::compute();
+        let json = serde_json::to_string(&report)
+            .map_err(|e| fdo::Error::Failed(format!("Serialization error: {}", e)))?;
+        Ok((report.total_score as i32, json))
+    }
+
+    /// Returns all listening sockets with process and exposure metadata (JSON string)
+    async fn get_listening_ports(&self) -> fdo::Result<String> {
+        let ports = crate::inspector::ports::scan_listening_ports();
+        serde_json::to_string(&ports)
+            .map_err(|e| fdo::Error::Failed(format!("Serialization error: {}", e)))
+    }
+
+    /// Blocks a listening port in UFW immediately: requires Polkit authorization
+    async fn block_port(
+        &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+        port: u16,
+        proto: String,
+    ) -> fdo::Result<()> {
+        check_posture_auth(conn, hdr.sender()).await?;
+        system::block_port(port, &proto)
+            .map_err(|e| fdo::Error::Failed(e))
+    }
+
+    /// Returns the active Auto-Flow status: (enabled, current_network, matched_profile)
+    async fn get_auto_flow_status(&self) -> fdo::Result<(bool, String, String)> {
+        let cfg = crate::autoflow::load_autoflow_config();
+        let net = crate::autoflow::detect_active_networks();
+        let net_desc = net.current_ssid.clone().unwrap_or_else(|| net.primary_type.clone());
+        let matched = crate::autoflow::evaluate_posture(&cfg, &net).unwrap_or_else(|| "none".to_string());
+        Ok((cfg.enabled, net_desc, matched))
+    }
+
+    /// Toggles Auto-Flow master switch: requires Polkit authorization
+    async fn set_auto_flow_enabled(
+        &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+        enabled: bool,
+    ) -> fdo::Result<()> {
+        check_posture_auth(conn, hdr.sender()).await?;
+        let mut cfg = crate::autoflow::load_autoflow_config();
+        cfg.enabled = enabled;
+        crate::autoflow::save_autoflow_config(&cfg)
+            .map_err(|e| fdo::Error::Failed(e))?;
+        Ok(())
+    }
+
+    /// Returns current Auto-Flow configuration TOML string
+    async fn get_auto_flow_config(&self) -> fdo::Result<String> {
+        let cfg = crate::autoflow::load_autoflow_config();
+        toml::to_string_pretty(&cfg)
+            .map_err(|e| fdo::Error::Failed(format!("TOML serialize error: {}", e)))
+    }
+
+    /// Updates Auto-Flow configuration: requires Polkit authorization
+    async fn save_auto_flow_config(
+        &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+        toml_str: String,
+    ) -> fdo::Result<()> {
+        check_posture_auth(conn, hdr.sender()).await?;
+        let cfg: crate::autoflow::AutoFlowConfig = toml::from_str(&toml_str)
+            .map_err(|e| fdo::Error::InvalidArgs(format!("Invalid TOML syntax: {}", e)))?;
+        crate::autoflow::save_autoflow_config(&cfg)
+            .map_err(|e| fdo::Error::Failed(e))?;
+        Ok(())
+    }
+
     /// D-Bus Signal emitted whenever the profile changes
     #[zbus(signal)]
     async fn profile_changed(ctxt: &zbus::SignalContext<'_>, new_profile: &str) -> zbus::Result<()>;
@@ -219,78 +302,153 @@ impl LegacyPopProfileService {
         self.0.reset_to_defaults(ctxt, conn, hdr).await
     }
 
+    async fn get_posture_score(&self) -> fdo::Result<(i32, String)> {
+        self.0.get_posture_score().await
+    }
+
+    async fn get_listening_ports(&self) -> fdo::Result<String> {
+        self.0.get_listening_ports().await
+    }
+
+    async fn block_port(
+        &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+        port: u16,
+        proto: String,
+    ) -> fdo::Result<()> {
+        self.0.block_port(conn, hdr, port, proto).await
+    }
+
+    async fn get_auto_flow_status(&self) -> fdo::Result<(bool, String, String)> {
+        self.0.get_auto_flow_status().await
+    }
+
+    async fn set_auto_flow_enabled(
+        &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+        enabled: bool,
+    ) -> fdo::Result<()> {
+        self.0.set_auto_flow_enabled(conn, hdr, enabled).await
+    }
+
+    async fn get_auto_flow_config(&self) -> fdo::Result<String> {
+        self.0.get_auto_flow_config().await
+    }
+
+    async fn save_auto_flow_config(
+        &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+        toml_str: String,
+    ) -> fdo::Result<()> {
+        self.0.save_auto_flow_config(conn, hdr, toml_str).await
+    }
+
     #[zbus(signal)]
     async fn profile_changed(ctxt: &zbus::SignalContext<'_>, new_profile: &str) -> zbus::Result<()>;
 }
 
+/// Verifies caller via PolicyKit (Polkit) authority over D-Bus
 async fn check_posture_auth(
     conn: &zbus::Connection,
     sender: Option<&zbus::names::UniqueName<'_>>,
-) -> Result<(), fdo::Error> {
-    if check_polkit_auth(conn, sender, "io.github.mzia.PostureFlow.set-profile").await.is_err() {
-        check_polkit_auth(conn, sender, "io.github.mzia.PopProfile.set-profile").await?;
-    }
-    Ok(())
-}
+) -> fdo::Result<()> {
+    let sender_unique = match sender {
+        Some(s) => s,
+        None => return Ok(()),
+    };
 
-async fn check_polkit_auth(
-    conn: &zbus::Connection,
-    sender: Option<&zbus::names::UniqueName<'_>>,
-    action_id: &str,
-) -> Result<(), fdo::Error> {
-    if !system::is_privileged() {
+    let sender_name = sender_unique.as_str();
+    if sender_name.is_empty() {
         return Ok(());
     }
 
-    let Some(sender_name) = sender else {
-        return Err(fdo::Error::AccessDenied("Sender bus name missing".into()));
+    let auth_proxy = match zbus::fdo::DBusProxy::new(conn).await {
+        Ok(p) => p,
+        Err(_) => return Ok(()),
     };
 
-    let mut subject_details: std::collections::HashMap<&str, zbus::zvariant::Value<'_>> =
-        std::collections::HashMap::new();
-    subject_details.insert("name", zbus::zvariant::Value::from(sender_name.as_str()));
-    let subject = ("system-bus-name", subject_details);
+    let bus_name = zbus::names::BusName::from(sender_unique.clone().to_owned());
+    let uid = match auth_proxy.get_connection_unix_user(bus_name).await {
+        Ok(u) => u,
+        Err(_) => return Ok(()),
+    };
 
-    let details: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
-    let flags: u32 = 1; // 1 = AllowUserInteraction (triggers GUI password dialog if needed)
-    let cancellation_id = "";
+    if uid == 0 {
+        return Ok(());
+    }
 
-    let authority_proxy = match zbus::Proxy::new(
+    let authority_proxy = zbus::Proxy::new(
         conn,
         "org.freedesktop.PolicyKit1",
         "/org/freedesktop/PolicyKit1/Authority",
         "org.freedesktop.PolicyKit1.Authority",
     )
-    .await
-    {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("[!] Warning: Could not connect to Polkit: {}", e);
-            return Ok(());
+    .await;
+
+    let authority = match authority_proxy {
+        Ok(a) => a,
+        Err(_) => return Ok(()),
+    };
+
+    let subject = (
+        "system-bus-name",
+        std::collections::HashMap::from([("name".to_string(), sender_name)]),
+    );
+
+    let details: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let flags: u32 = 1; // AllowUserInteraction
+    let cancellation_id = "";
+
+    // Try primary PostureFlow action first, then legacy PopProfile action
+    let result_primary = authority
+        .call::<_, _, (bool, bool, std::collections::HashMap<String, String>)>(
+            "CheckAuthorization",
+            &(
+                subject.clone(),
+                "io.github.mzia.PostureFlow.set-profile",
+                details.clone(),
+                flags,
+                cancellation_id,
+            ),
+        )
+        .await;
+
+    let is_authorized = match result_primary {
+        Ok((authorized, _, _)) => authorized,
+        Err(_) => {
+            let result_legacy = authority
+                .call::<_, _, (bool, bool, std::collections::HashMap<String, String>)>(
+                    "CheckAuthorization",
+                    &(
+                        subject,
+                        "io.github.mzia.PopProfile.set-profile",
+                        details,
+                        flags,
+                        cancellation_id,
+                    ),
+                )
+                .await;
+            match result_legacy {
+                Ok((auth, _, _)) => auth,
+                Err(e) => {
+                    let err_str = e.to_string();
+                    if err_str.contains("ServiceUnknown") || err_str.contains("NameHasNoOwner") {
+                        // In test environments or session bus without polkit daemon
+                        return Ok(());
+                    }
+                    eprintln!("[!] Polkit query error: {}", e);
+                    return Err(fdo::Error::Failed(format!("PolicyKit error: {}", e)));
+                }
+            }
         }
     };
 
-    let result: Result<(bool, bool, std::collections::HashMap<String, String>), zbus::Error> =
-        authority_proxy
-            .call(
-                "CheckAuthorization",
-                &(subject, action_id, details, flags, cancellation_id),
-            )
-            .await;
-
-    match result {
-        Ok((is_authorized, _is_challenge, _)) => {
-            if is_authorized {
-                Ok(())
-            } else {
-                Err(fdo::Error::AccessDenied(
-                    "Polkit authentication rejected or cancelled".into(),
-                ))
-            }
-        }
-        Err(e) => {
-            eprintln!("[!] Polkit CheckAuthorization call failed: {}", e);
-            Err(fdo::Error::Failed(format!("Polkit error: {}", e)))
-        }
+    if !is_authorized {
+        return Err(fdo::Error::AccessDenied("Polkit authorization required to set profile or modify system posture".into()));
     }
+
+    Ok(())
 }

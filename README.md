@@ -56,6 +56,9 @@ sudo postureflow --dev       # Coding & debugging (ptrace allowed, 524k file wat
 sudo postureflow --travel    # Coffee shops, airports & public Wi-Fi (stealth mode, alias: --secure)
 sudo postureflow --reset     # Reset all settings back to Pop!_OS factory defaults
 postureflow --status         # Inspect live posture without sudo
+postureflow --score          # Calculate real-time Security Posture Score (0-100%, Grade)
+postureflow --ports          # Inspect live listening sockets & process owners
+postureflow --autoflow       # Check autonomous network detection & SSID rules
 ```
 *(Legacy commands like `sudo pop-profile --dev` continue to work seamlessly via automatic compatibility symlinks).*
 
@@ -163,6 +166,13 @@ Desktop profile switching and custom profile imports use Polkit's `auth_admin_ke
 | `ValidateProfile` | Method | `(s) -> (b, s)` | Validates TOML against anti-lockout rules, returning sanitized TOML or error. |
 | `SaveCustomProfile` | Method | `(s, s) -> ()` | Saves a validated profile TOML to `/etc/postureflow/profiles.d/<id>.postureflow.toml`. |
 | `DeleteCustomProfile`| Method | `(s) -> ()` | Removes a custom profile from `/etc/postureflow/profiles.d/`. |
+| `GetPostureScore` | Method | `() -> (i, s)` | Returns real-time score (0-100) and itemized audit report JSON. |
+| `GetListeningPorts` | Method | `() -> (s)` | Returns JSON array of all active listening sockets, PIDs, and process names. |
+| `BlockPort` | Method | `(q, s) -> ()` | Immediately denies and blocks incoming traffic on a port via UFW. |
+| `GetAutoFlowStatus` | Method | `() -> (b, s, s)` | Returns `(enabled, active_network_ssid, matched_profile)`. |
+| `SetAutoFlowEnabled`| Method | `(b) -> ()` | Enables or disables the autonomous network watcher daemon engine. |
+| `GetAutoFlowConfig` | Method | `() -> (s)` | Returns the active `autoflow.toml` configuration content. |
+| `SaveAutoFlowConfig`| Method | `(s) -> ()` | Updates and saves `/etc/postureflow/autoflow.toml`. |
 | `ProfileChanged` | Signal | `(s)` | Broadcasts when a profile switch occurs. |
 
 *(All methods and signals are also mirrored to `io.github.mzia.PopProfile` for legacy integrations).*

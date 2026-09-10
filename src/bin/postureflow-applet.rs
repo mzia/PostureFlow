@@ -210,6 +210,38 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         }
                     }
 
+                    MenuAction::ToggleAutoFlow => {
+                        println!("[*] Toggling Auto-Flow state...");
+                        let mut cfg = postureflow::autoflow::load_autoflow_config();
+                        cfg.enabled = !cfg.enabled;
+                        let _ = postureflow::autoflow::save_autoflow_config(&cfg);
+                        let notif_text = if cfg.enabled {
+                            "Auto-Flow Enabled: PostureFlow will dynamically adapt to connected networks."
+                        } else {
+                            "Auto-Flow Disabled: Manual profile switching engaged."
+                        };
+                        daemon.send_notification(
+                            "PostureFlow Auto-Flow",
+                            notif_text,
+                            "network-wireless-symbolic",
+                        ).await;
+                        emit_profile_updated(&session_conn, &state).await;
+                    }
+
+                    MenuAction::OpenInspector => {
+                        println!("[*] Launching postureflow-gui in Port Inspector view...");
+                        let mut launched = std::process::Command::new("postureflow-gui")
+                            .arg("--tab")
+                            .arg("ports")
+                            .spawn();
+                        if launched.is_err() {
+                            launched = std::process::Command::new("postureflow-gui").spawn();
+                        }
+                        if launched.is_err() {
+                            let _ = std::process::Command::new("pop-profile-gui").spawn();
+                        }
+                    }
+
                     MenuAction::ResetDefaults => {
                         println!("[*] Resetting to Pop!_OS factory defaults...");
                         match daemon.reset_to_defaults().await {
