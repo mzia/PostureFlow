@@ -1,4 +1,4 @@
-#compdef postureflow pop-profile
+#compdef postureflow
 
 _postureflow() {
     local -a options=(

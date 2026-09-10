@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# D-Bus Integration Test for postureflow-daemon (with pop-profile compat)
+# D-Bus Integration Test for postureflow-daemon
 # ==============================================================================
 
 set -eo pipefail
@@ -15,9 +15,6 @@ echo -e "\n${BOLD}${CYAN}=== Testing postureflow-daemon D-Bus Interface ===${NC}
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 BIN_PATH="$SCRIPT_DIR/../target/release/postureflow-daemon"
-if [ ! -f "$BIN_PATH" ]; then
-    BIN_PATH="$SCRIPT_DIR/../target/release/pop-profile-daemon"
-fi
 
 if [ ! -f "$BIN_PATH" ]; then
     echo -e "${RED}[-] Binary not found at $BIN_PATH. Run 'cargo build --release' first.${NC}"
@@ -28,13 +25,9 @@ dbus-run-session bash << 'EOF'
 set -eo pipefail
 
 BIN="./target/release/postureflow-daemon"
-if [ ! -f "$BIN" ]; then
-    BIN="./target/release/pop-profile-daemon"
-fi
 
 TEST_STATE=$(mktemp)
 export POSTUREFLOW_STATE_FILE="$TEST_STATE"
-export POP_PROFILE_STATE_FILE="$TEST_STATE"
 
 echo "[*] Launching postureflow-daemon on test session bus..."
 $BIN --daemon --session-bus &
@@ -97,13 +90,5 @@ echo "[*] Calling GetAutoFlowStatus()..."
 AF_RES=$(gdbus call --session --dest io.github.mzia.PostureFlow --object-path /io/github/mzia/PostureFlow --method io.github.mzia.PostureFlow.GetAutoFlowStatus)
 echo "    -> Output: $AF_RES"
 
-echo "[*] Verifying Backwards Compatibility: Calling GetActiveProfile() via legacy io.github.mzia.PopProfile..."
-LEGACY_PROFILE=$(gdbus call --session --dest io.github.mzia.PopProfile --object-path /io/github/mzia/PopProfile --method io.github.mzia.PopProfile.GetActiveProfile)
-echo "    -> Output: $LEGACY_PROFILE"
-if [[ "$LEGACY_PROFILE" != "$ACTIVE_PROFILE" ]]; then
-    echo "[-] Error: Legacy D-Bus service returned different profile than primary service"
-    exit 1
-fi
-
-echo -e "\033[0;32m[✔] All PostureFlow & legacy PopProfile D-Bus methods responded successfully!\033[0m"
+echo -e "\033[0;32m[✔] All PostureFlow D-Bus methods responded successfully!\033[0m"
 EOF

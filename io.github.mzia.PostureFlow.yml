@@ -13,9 +13,8 @@ finish-args:
   - --socket=fallback-x11
   - --device=dri
 
-  # Host D-Bus communication with privileged system daemon (primary + compat)
+  # Host D-Bus communication with privileged system daemon
   - --system-talk-name=io.github.mzia.PostureFlow
-  - --system-talk-name=io.github.mzia.PopProfile
 
   # Desktop integration portals (file picker for TOML import/export, notifications)
   - --talk-name=org.freedesktop.Notifications
@@ -28,7 +27,6 @@ finish-args:
 
   # Custom profile persistence in user's XDG config
   - --filesystem=xdg-config/postureflow:create
-  - --filesystem=xdg-config/pop-profile:create
 
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin
@@ -44,8 +42,6 @@ modules:
       # Install binaries to Flatpak prefix /app/bin
       - install -Dm755 target/release/postureflow-gui /app/bin/postureflow-gui
       - install -Dm755 target/release/postureflow-applet /app/bin/postureflow-applet
-      - ln -sf postureflow-gui /app/bin/pop-profile-gui
-      - ln -sf postureflow-applet /app/bin/pop-profile-applet
       # Install desktop file, metainfo, and icons
       - install -Dm644 data/io.github.mzia.PostureFlow.desktop /app/share/applications/io.github.mzia.PostureFlow.desktop
       - install -Dm644 data/io.github.mzia.PostureFlow.metainfo.xml /app/share/metainfo/io.github.mzia.PostureFlow.metainfo.xml

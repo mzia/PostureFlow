@@ -54,7 +54,7 @@ trap cleanup EXIT
 sleep 2
 
 # Discover the unique bus name for the applet
-APPLET_DEST=$(busctl --user list | grep -E 'postureflow-app|pop-profile-app' | awk '{print $1}' || true)
+APPLET_DEST=$(busctl --user list | grep -E 'postureflow-app' | awk '{print $1}' || true)
 if [ -z "$APPLET_DEST" ]; then
     APPLET_DEST=":1.2"
 fi
@@ -77,6 +77,9 @@ if [[ "$LAYOUT" != *"Configure Profiles"* ]]; then
     echo "[-] Error: Expected 'Configure Profiles' in menu layout"
     exit 1
 fi
+
+# Temporarily disable Auto-Flow during manual cycling tests
+gdbus call --session --dest io.github.mzia.PostureFlow --object-path /io/github/mzia/PostureFlow --method io.github.mzia.PostureFlow.SetAutoFlowEnabled false >/dev/null
 
 echo "[*] Step 5: Simulating user click on Work Profile (Item ID 11)..."
 gdbus call --session --dest "$APPLET_DEST" --object-path /com/canonical/dbusmenu --method com.canonical.dbusmenu.Event 11 "clicked" "<0>" 0

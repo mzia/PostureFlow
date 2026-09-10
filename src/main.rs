@@ -1,10 +1,7 @@
 use std::error::Error;
 use clap::Parser;
 use postureflow::profile::Profile;
-use postureflow::dbus::{
-    PostureFlowService, LegacyPopProfileService,
-    DBUS_INTERFACE, DBUS_PATH, LEGACY_DBUS_INTERFACE, LEGACY_DBUS_PATH,
-};
+use postureflow::dbus::{PostureFlowService, DBUS_INTERFACE, DBUS_PATH};
 use postureflow::system;
 use postureflow::inspector::{ports, PostureScoreReport};
 use postureflow::autoflow;
@@ -186,29 +183,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
 async fn run_daemon(session_bus: bool) -> Result<(), Box<dyn Error>> {
     println!("[*] Starting postureflow-daemon (v1.0.0)...");
     let service = PostureFlowService::new();
-    let legacy_service = LegacyPopProfileService(service.clone());
 
     let connection = if session_bus {
         println!("[*] Connecting to D-Bus Session Bus (Test mode)...");
         zbus::connection::Builder::session()?
             .name(DBUS_INTERFACE)?
-            .name(LEGACY_DBUS_INTERFACE)?
             .serve_at(DBUS_PATH, service.clone())?
-            .serve_at(LEGACY_DBUS_PATH, legacy_service)?
             .build()
             .await?
     } else {
         println!("[*] Connecting to D-Bus System Bus...");
         zbus::connection::Builder::system()?
             .name(DBUS_INTERFACE)?
-            .name(LEGACY_DBUS_INTERFACE)?
             .serve_at(DBUS_PATH, service.clone())?
-            .serve_at(LEGACY_DBUS_PATH, legacy_service)?
             .build()
             .await?
     };
 
-    println!("[+] D-Bus Service registered at {} and {} (compat)", DBUS_INTERFACE, LEGACY_DBUS_INTERFACE);
+    println!("[+] D-Bus Service registered at {}", DBUS_INTERFACE);
     println!("[+] Daemon ready and listening for requests.");
 
     // Spawn reactive Auto-Flow background watcher
@@ -257,13 +249,6 @@ async fn run_daemon(session_bus: bool) -> Result<(), Box<dyn Error>> {
                                 Option::<&str>::None,
                                 DBUS_PATH,
                                 DBUS_INTERFACE,
-                                "ProfileChanged",
-                                &(&target_profile),
-                            ).await;
-                            let _ = conn_clone.emit_signal(
-                                Option::<&str>::None,
-                                LEGACY_DBUS_PATH,
-                                LEGACY_DBUS_INTERFACE,
                                 "ProfileChanged",
                                 &(&target_profile),
                             ).await;

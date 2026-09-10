@@ -12,13 +12,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 pub const SYSTEM_PROFILES_DIR: &str = "/etc/postureflow/profiles.d";
-pub const LEGACY_SYSTEM_PROFILES_DIR: &str = "/etc/pop-profile/profiles.d";
 
 pub fn user_profiles_dir() -> PathBuf {
     if let Ok(path) = std::env::var("POSTUREFLOW_CUSTOM_DIR") {
-        return PathBuf::from(path);
-    }
-    if let Ok(path) = std::env::var("POP_PROFILE_CUSTOM_DIR") {
         return PathBuf::from(path);
     }
     if let Ok(config_home) = std::env::var("XDG_CONFIG_HOME") {
@@ -27,16 +23,6 @@ pub fn user_profiles_dir() -> PathBuf {
         PathBuf::from(home).join(".config/postureflow/profiles.d")
     } else {
         PathBuf::from("/tmp/postureflow/profiles.d")
-    }
-}
-
-pub fn legacy_user_profiles_dir() -> PathBuf {
-    if let Ok(config_home) = std::env::var("XDG_CONFIG_HOME") {
-        PathBuf::from(config_home).join("pop-profile/profiles.d")
-    } else if let Ok(home) = std::env::var("HOME") {
-        PathBuf::from(home).join(".config/pop-profile/profiles.d")
-    } else {
-        PathBuf::from("/tmp/pop-profile/profiles.d")
     }
 }
 
@@ -262,17 +248,12 @@ pub fn load_all_profiles() -> Vec<ProfileConfig> {
     let mut profiles = builtin_profiles();
     let mut ids: std::collections::HashSet<String> = profiles.iter().map(|p| p.profile.id.clone()).collect();
 
-    // 1. Scan System directory (/etc/postureflow/profiles.d) & legacy (/etc/pop-profile/profiles.d)
+    // 1. Scan System directory (/etc/postureflow/profiles.d)
     scan_directory(Path::new(SYSTEM_PROFILES_DIR), &mut profiles, &mut ids);
-    scan_directory(Path::new(LEGACY_SYSTEM_PROFILES_DIR), &mut profiles, &mut ids);
 
-    // 2. Scan User directory (~/.config/postureflow/profiles.d) & legacy (~/.config/pop-profile/profiles.d)
+    // 2. Scan User directory (~/.config/postureflow/profiles.d)
     let user_dir = user_profiles_dir();
     scan_directory(&user_dir, &mut profiles, &mut ids);
-    let legacy_user_dir = legacy_user_profiles_dir();
-    if legacy_user_dir != user_dir {
-        scan_directory(&legacy_user_dir, &mut profiles, &mut ids);
-    }
 
     profiles
 }

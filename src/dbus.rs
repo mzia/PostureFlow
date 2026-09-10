@@ -5,15 +5,11 @@ use crate::system;
 
 pub const DBUS_INTERFACE: &str = "io.github.mzia.PostureFlow";
 pub const DBUS_PATH: &str = "/io/github/mzia/PostureFlow";
-pub const LEGACY_DBUS_INTERFACE: &str = "io.github.mzia.PopProfile";
-pub const LEGACY_DBUS_PATH: &str = "/io/github/mzia/PopProfile";
 
 #[derive(Clone)]
 pub struct PostureFlowService {
     active_profile: Arc<Mutex<String>>,
 }
-
-pub type PopProfileService = PostureFlowService;
 
 impl PostureFlowService {
     pub fn new() -> Self {
@@ -239,117 +235,6 @@ impl PostureFlowService {
     async fn profile_changed(ctxt: &zbus::SignalContext<'_>, new_profile: &str) -> zbus::Result<()>;
 }
 
-/// Backwards-compatibility wrapper serving io.github.mzia.PopProfile
-#[derive(Clone)]
-pub struct LegacyPopProfileService(pub PostureFlowService);
-
-#[interface(name = "io.github.mzia.PopProfile")]
-impl LegacyPopProfileService {
-    async fn get_active_profile(&self) -> String {
-        self.0.get_active_profile().await
-    }
-
-    async fn set_profile(
-        &self,
-        #[zbus(signal_context)] ctxt: zbus::SignalContext<'_>,
-        #[zbus(connection)] conn: &zbus::Connection,
-        #[zbus(header)] hdr: zbus::message::Header<'_>,
-        profile: String,
-    ) -> fdo::Result<()> {
-        self.0.set_profile(ctxt, conn, hdr, profile).await
-    }
-
-    async fn list_profiles(&self) -> Vec<(String, String, String, String, bool)> {
-        self.0.list_profiles().await
-    }
-
-    async fn get_profile_details(&self, id: String) -> fdo::Result<String> {
-        self.0.get_profile_details(id).await
-    }
-
-    async fn validate_profile(&self, toml_content: String) -> fdo::Result<(bool, Vec<String>, String)> {
-        self.0.validate_profile(toml_content).await
-    }
-
-    async fn save_custom_profile(
-        &self,
-        #[zbus(connection)] conn: &zbus::Connection,
-        #[zbus(header)] hdr: zbus::message::Header<'_>,
-        toml_content: String,
-    ) -> fdo::Result<String> {
-        self.0.save_custom_profile(conn, hdr, toml_content).await
-    }
-
-    async fn delete_custom_profile(
-        &self,
-        #[zbus(connection)] conn: &zbus::Connection,
-        #[zbus(header)] hdr: zbus::message::Header<'_>,
-        id: String,
-    ) -> fdo::Result<()> {
-        self.0.delete_custom_profile(conn, hdr, id).await
-    }
-
-    async fn get_status(&self) -> String {
-        self.0.get_status().await
-    }
-
-    async fn reset_to_defaults(
-        &self,
-        #[zbus(signal_context)] ctxt: zbus::SignalContext<'_>,
-        #[zbus(connection)] conn: &zbus::Connection,
-        #[zbus(header)] hdr: zbus::message::Header<'_>,
-    ) -> fdo::Result<()> {
-        self.0.reset_to_defaults(ctxt, conn, hdr).await
-    }
-
-    async fn get_posture_score(&self) -> fdo::Result<(i32, String)> {
-        self.0.get_posture_score().await
-    }
-
-    async fn get_listening_ports(&self) -> fdo::Result<String> {
-        self.0.get_listening_ports().await
-    }
-
-    async fn block_port(
-        &self,
-        #[zbus(connection)] conn: &zbus::Connection,
-        #[zbus(header)] hdr: zbus::message::Header<'_>,
-        port: u16,
-        proto: String,
-    ) -> fdo::Result<()> {
-        self.0.block_port(conn, hdr, port, proto).await
-    }
-
-    async fn get_auto_flow_status(&self) -> fdo::Result<(bool, String, String)> {
-        self.0.get_auto_flow_status().await
-    }
-
-    async fn set_auto_flow_enabled(
-        &self,
-        #[zbus(connection)] conn: &zbus::Connection,
-        #[zbus(header)] hdr: zbus::message::Header<'_>,
-        enabled: bool,
-    ) -> fdo::Result<()> {
-        self.0.set_auto_flow_enabled(conn, hdr, enabled).await
-    }
-
-    async fn get_auto_flow_config(&self) -> fdo::Result<String> {
-        self.0.get_auto_flow_config().await
-    }
-
-    async fn save_auto_flow_config(
-        &self,
-        #[zbus(connection)] conn: &zbus::Connection,
-        #[zbus(header)] hdr: zbus::message::Header<'_>,
-        toml_str: String,
-    ) -> fdo::Result<()> {
-        self.0.save_auto_flow_config(conn, hdr, toml_str).await
-    }
-
-    #[zbus(signal)]
-    async fn profile_changed(ctxt: &zbus::SignalContext<'_>, new_profile: &str) -> zbus::Result<()>;
-}
-
 /// Verifies caller via PolicyKit (Polkit) authority over D-Bus
 async fn check_posture_auth(
     conn: &zbus::Connection,
@@ -402,47 +287,29 @@ async fn check_posture_auth(
     let flags: u32 = 1; // AllowUserInteraction
     let cancellation_id = "";
 
-    // Try primary PostureFlow action first, then legacy PopProfile action
-    let result_primary = authority
+    let result = authority
         .call::<_, _, (bool, bool, std::collections::HashMap<String, String>)>(
             "CheckAuthorization",
             &(
-                subject.clone(),
+                subject,
                 "io.github.mzia.PostureFlow.set-profile",
-                details.clone(),
+                details,
                 flags,
                 cancellation_id,
             ),
         )
         .await;
 
-    let is_authorized = match result_primary {
+    let is_authorized = match result {
         Ok((authorized, _, _)) => authorized,
-        Err(_) => {
-            let result_legacy = authority
-                .call::<_, _, (bool, bool, std::collections::HashMap<String, String>)>(
-                    "CheckAuthorization",
-                    &(
-                        subject,
-                        "io.github.mzia.PopProfile.set-profile",
-                        details,
-                        flags,
-                        cancellation_id,
-                    ),
-                )
-                .await;
-            match result_legacy {
-                Ok((auth, _, _)) => auth,
-                Err(e) => {
-                    let err_str = e.to_string();
-                    if err_str.contains("ServiceUnknown") || err_str.contains("NameHasNoOwner") {
-                        // In test environments or session bus without polkit daemon
-                        return Ok(());
-                    }
-                    eprintln!("[!] Polkit query error: {}", e);
-                    return Err(fdo::Error::Failed(format!("PolicyKit error: {}", e)));
-                }
+        Err(e) => {
+            let err_str = e.to_string();
+            if err_str.contains("ServiceUnknown") || err_str.contains("NameHasNoOwner") {
+                // In test environments or session bus without polkit daemon
+                return Ok(());
             }
+            eprintln!("[!] Polkit query error: {}", e);
+            return Err(fdo::Error::Failed(format!("PolicyKit error: {}", e)));
         }
     };
 

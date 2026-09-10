@@ -12,4 +12,3 @@ _postureflow_completions() {
     fi
 }
 complete -F _postureflow_completions postureflow
-complete -F _postureflow_completions pop-profile

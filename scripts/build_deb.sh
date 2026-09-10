@@ -53,23 +53,17 @@ mkdir -p "$STAGE_DIR/usr/share/bash-completion/completions"
 mkdir -p "$STAGE_DIR/usr/share/zsh/vendor-completions"
 mkdir -p "$STAGE_DIR/etc/apt/apt.conf.d"
 mkdir -p "$STAGE_DIR/etc/postureflow/profiles.d"
-mkdir -p "$STAGE_DIR/etc/pop-profile/profiles.d"
 mkdir -p "$DIST_DIR"
 
-# 3. Copy Binaries & Compatibility Symlinks
+# 3. Copy Binaries & Applet Symlinks
 install -m 755 "$REPO_ROOT/bin/postureflow" "$STAGE_DIR/usr/bin/postureflow"
-ln -sf postureflow "$STAGE_DIR/usr/bin/pop-profile"
 
 install -m 755 "$REPO_ROOT/target/release/postureflow-daemon" "$STAGE_DIR/usr/bin/postureflow-daemon"
-ln -sf postureflow-daemon "$STAGE_DIR/usr/bin/pop-profile-daemon"
 
 install -m 755 "$REPO_ROOT/target/release/postureflow-applet" "$STAGE_DIR/usr/bin/postureflow-applet"
-ln -sf postureflow-applet "$STAGE_DIR/usr/bin/pop-profile-applet"
 ln -sf postureflow-applet "$STAGE_DIR/usr/bin/cosmic-applet-postureflow"
-ln -sf postureflow-applet "$STAGE_DIR/usr/bin/cosmic-applet-popprofile"
 
 install -m 755 "$REPO_ROOT/target/release/postureflow-gui" "$STAGE_DIR/usr/bin/postureflow-gui"
-ln -sf postureflow-gui "$STAGE_DIR/usr/bin/pop-profile-gui"
 
 if command -v strip >/dev/null 2>&1; then
     strip --strip-unneeded "$STAGE_DIR/usr/bin/postureflow-daemon"
@@ -79,39 +73,30 @@ fi
 
 # 4. Copy Service, Polkit, D-Bus, Desktop Entry
 install -m 644 "$REPO_ROOT/data/postureflow-daemon.service" "$STAGE_DIR/lib/systemd/system/postureflow-daemon.service"
-ln -sf postureflow-daemon.service "$STAGE_DIR/lib/systemd/system/pop-profile-daemon.service"
 
 install -m 644 "$REPO_ROOT/data/postureflow-applet.service" "$STAGE_DIR/usr/lib/systemd/user/postureflow-applet.service"
-ln -sf postureflow-applet.service "$STAGE_DIR/usr/lib/systemd/user/pop-profile-applet.service"
 
 install -m 644 "$REPO_ROOT/data/io.github.mzia.PostureFlow.desktop" "$STAGE_DIR/usr/share/applications/io.github.mzia.PostureFlow.desktop"
 install -m 644 "$REPO_ROOT/data/io.github.mzia.PostureFlow.Applet.desktop" "$STAGE_DIR/usr/share/applications/io.github.mzia.PostureFlow.Applet.desktop"
-install -m 644 "$REPO_ROOT/data/io.github.mzia.PopProfile.Settings.desktop" "$STAGE_DIR/usr/share/applications/io.github.mzia.PopProfile.Settings.desktop"
-install -m 644 "$REPO_ROOT/data/io.github.mzia.PopProfile.Applet.desktop" "$STAGE_DIR/usr/share/applications/io.github.mzia.PopProfile.Applet.desktop"
 
 install -m 644 "$REPO_ROOT/data/icons/io.github.mzia.PostureFlow.svg" "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps/io.github.mzia.PostureFlow.svg"
-install -m 644 "$REPO_ROOT/data/icons/io.github.mzia.PostureFlow.svg" "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps/io.github.mzia.PopProfile.svg"
 
 install -m 644 "$REPO_ROOT/data/io.github.mzia.PostureFlow.policy" "$STAGE_DIR/usr/share/polkit-1/actions/io.github.mzia.PostureFlow.policy"
 install -m 644 "$REPO_ROOT/data/io.github.mzia.PostureFlow.conf" "$STAGE_DIR/usr/share/dbus-1/system.d/io.github.mzia.PostureFlow.conf"
-install -m 644 "$REPO_ROOT/data/io.github.mzia.PopProfile.conf" "$STAGE_DIR/usr/share/dbus-1/system.d/io.github.mzia.PopProfile.conf"
 
 # 5. Copy Man Page (gzipped)
 gzip -c -9 "$REPO_ROOT/man/postureflow.1" > "$STAGE_DIR/usr/share/man/man1/postureflow.1.gz"
 chmod 644 "$STAGE_DIR/usr/share/man/man1/postureflow.1.gz"
-ln -sf postureflow.1.gz "$STAGE_DIR/usr/share/man/man1/pop-profile.1.gz"
 
 # 6. Copy Completions
 install -m 644 "$REPO_ROOT/completions/postureflow.bash" "$STAGE_DIR/usr/share/bash-completion/completions/postureflow"
-ln -sf postureflow "$STAGE_DIR/usr/share/bash-completion/completions/pop-profile"
 
 install -m 644 "$REPO_ROOT/completions/postureflow.zsh" "$STAGE_DIR/usr/share/zsh/vendor-completions/_postureflow"
-ln -sf _postureflow "$STAGE_DIR/usr/share/zsh/vendor-completions/_pop-profile"
 
 # 7. Copy APT Post-Upgrade Hook
 cat << 'EOF' > "$STAGE_DIR/etc/apt/apt.conf.d/99-postureflow-health"
 // Automatically maintain PostureFlow security & power profiles after package updates
-DPkg::Post-Invoke { "if [ -x /usr/bin/postureflow ]; then /usr/bin/postureflow >/dev/null 2>&1 || true; elif [ -x /usr/bin/pop-profile ]; then /usr/bin/pop-profile >/dev/null 2>&1 || true; fi"; };
+DPkg::Post-Invoke { "if [ -x /usr/bin/postureflow ]; then /usr/bin/postureflow >/dev/null 2>&1 || true; fi"; };
 EOF
 chmod 644 "$STAGE_DIR/etc/apt/apt.conf.d/99-postureflow-health"
 
@@ -120,19 +105,18 @@ cat << EOF > "$STAGE_DIR/DEBIAN/control"
 Package: ${PKG_NAME}
 Version: ${VERSION}
 Architecture: ${ARCH}
-Maintainer: M. Zia <https://github.com/mzia/pop-profile-manager>
+Maintainer: M. Zia <https://github.com/mzia/PostureFlow>
 Depends: ufw (>= 0.36), dbus, polkitd | policykit-1
-Provides: pop-profile (= ${VERSION})
 Conflicts: pop-profile (<= ${VERSION})
 Replaces: pop-profile (<= ${VERSION})
 Section: utils
 Priority: optional
-Homepage: https://github.com/mzia/pop-profile-manager
+Homepage: https://github.com/mzia/PostureFlow
 Description: Dynamic security posture, hardware power, and lifestyle workflow orchestrator
- PostureFlow (formerly pop-profile) dynamically bridges the gap between
- paranoid security, frictionless software engineering, and casual
- entertainment on Linux and Pop!_OS laptops. Includes a native Rust D-Bus
- daemon, status bar applet, GUI settings, and Polkit policy.
+ PostureFlow dynamically bridges the gap between paranoid security,
+ frictionless software engineering, and casual entertainment on
+ Linux and Pop!_OS laptops. Includes a native Rust D-Bus daemon,
+ status bar applet, GUI settings, and Polkit policy.
 EOF
 chmod 644 "$STAGE_DIR/DEBIAN/control"
 
@@ -177,7 +161,6 @@ case "$1" in
         if [ -d /run/systemd/system ]; then
             systemctl stop postureflow-daemon.service >/dev/null 2>&1 || true
             systemctl disable postureflow-daemon.service >/dev/null 2>&1 || true
-            systemctl stop pop-profile-daemon.service >/dev/null 2>&1 || true
         fi
         ;;
 esac

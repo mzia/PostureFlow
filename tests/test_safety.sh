@@ -98,9 +98,6 @@ total=$((total + 1))
 echo -n "  [TEST 6] Checking eBPF configuration safety... "
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 BIN_FILE="$SCRIPT_DIR/../bin/postureflow"
-if [ ! -f "$BIN_FILE" ]; then
-    BIN_FILE="$SCRIPT_DIR/../bin/pop-profile"
-fi
 
 if ! grep -q -E "^kernel\.unprivileged_bpf_disabled\s*=\s*1" "$BIN_FILE"; then
     echo -e "${GREEN}PASSED${NC} (Uses admin-managed value 2, avoiding irreversible lock)"
@@ -122,7 +119,7 @@ fi
 # Test 8: Man Page Documentation Availability
 total=$((total + 1))
 echo -n "  [TEST 8] Verifying documentation & man page presence... "
-if [ -f "$SCRIPT_DIR/../man/postureflow.1" ] || [ -f "$SCRIPT_DIR/../man/pop-profile.1" ] || [ -f "$SCRIPT_DIR/../README.md" ]; then
+if [ -f "$SCRIPT_DIR/../man/postureflow.1" ] || [ -f "$SCRIPT_DIR/../README.md" ]; then
     echo -e "${GREEN}PASSED${NC}"
     passed=$((passed + 1))
 else

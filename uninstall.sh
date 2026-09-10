@@ -43,9 +43,6 @@ if [ -x /usr/bin/postureflow ]; then
 elif [ -x /usr/local/bin/postureflow ]; then
     echo "[*] Reverting firewall and sysctl settings to Pop!_OS defaults..."
     /usr/local/bin/postureflow --reset || true
-elif [ -x /usr/bin/pop-profile ]; then
-    echo "[*] Reverting firewall and sysctl settings to Pop!_OS defaults..."
-    /usr/bin/pop-profile --reset || true
 fi
 
 # Remove installed files

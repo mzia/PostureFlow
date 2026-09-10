@@ -26,18 +26,14 @@ log_title()   { echo -e "\n${BOLD}${CYAN}=== $1 ===${NC}"; }
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 VERSION="1.0.0"
 STATE_FILE="/etc/postureflow-state"
-LEGACY_STATE_FILE="/etc/popos-security-profile"
 SYSCTL_CONF="/etc/sysctl.d/99-postureflow.conf"
-LEGACY_SYSCTL_CONF="/etc/sysctl.d/99-popos-security.conf"
 LIMITS_CONF="/etc/security/limits.d/99-postureflow.conf"
-LEGACY_LIMITS_CONF="/etc/security/limits.d/99-popos-security.conf"
 
 DEV_PORTS=(3000 5000 5173 8000 8080 8888 9000)
 
 save_state() {
     local p="$1"
     echo "$p" > "$STATE_FILE"
-    echo "$p" > "$LEGACY_STATE_FILE" 2>/dev/null || true
 }
 
 get_current_profile() {
@@ -415,7 +411,7 @@ reset_to_defaults() {
 
 case "${1:-}" in
     -v|--version)
-        echo "postureflow version $VERSION (compat: pop-profile)"
+        echo "postureflow version $VERSION"
         exit 0
         ;;
     -h|--help)

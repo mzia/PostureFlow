@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # PostureFlow Installer (CLI + Rust D-Bus Daemon + Applet + GUI + Polkit)
-# Backwards compatible with pop-profile
 # ==============================================================================
 
 set -eo pipefail
@@ -34,68 +33,47 @@ if [ "$DEV_MODE" -eq 1 ]; then
     echo "[*] Linking workspace CLI and binaries to /usr/local/bin and /usr/bin..."
     ln -sf "$SCRIPT_DIR/bin/postureflow" /usr/local/bin/postureflow
     ln -sf /usr/local/bin/postureflow /usr/bin/postureflow
-    ln -sf postureflow /usr/local/bin/pop-profile
-    ln -sf postureflow /usr/bin/pop-profile
 
     if [ -f "$SCRIPT_DIR/target/release/postureflow-daemon" ]; then
         ln -sf "$SCRIPT_DIR/target/release/postureflow-daemon" /usr/local/bin/postureflow-daemon
         ln -sf /usr/local/bin/postureflow-daemon /usr/bin/postureflow-daemon
-        ln -sf postureflow-daemon /usr/local/bin/pop-profile-daemon
-        ln -sf postureflow-daemon /usr/bin/pop-profile-daemon
     fi
     if [ -f "$SCRIPT_DIR/target/release/postureflow-applet" ]; then
         ln -sf "$SCRIPT_DIR/target/release/postureflow-applet" /usr/local/bin/postureflow-applet
         ln -sf /usr/local/bin/postureflow-applet /usr/bin/postureflow-applet
-        ln -sf postureflow-applet /usr/local/bin/pop-profile-applet
-        ln -sf postureflow-applet /usr/bin/pop-profile-applet
         ln -sf postureflow-applet /usr/bin/cosmic-applet-postureflow
         ln -sf postureflow-applet /usr/local/bin/cosmic-applet-postureflow
-        ln -sf postureflow-applet /usr/bin/cosmic-applet-popprofile
-        ln -sf postureflow-applet /usr/local/bin/cosmic-applet-popprofile
     fi
     if [ -f "$SCRIPT_DIR/target/release/postureflow-gui" ]; then
         ln -sf "$SCRIPT_DIR/target/release/postureflow-gui" /usr/local/bin/postureflow-gui
         ln -sf /usr/local/bin/postureflow-gui /usr/bin/postureflow-gui
-        ln -sf postureflow-gui /usr/local/bin/pop-profile-gui
-        ln -sf postureflow-gui /usr/bin/pop-profile-gui
     fi
 else
     echo "[*] Installing CLI to /usr/local/bin/postureflow and /usr/bin/postureflow..."
     install -m 755 "$SCRIPT_DIR/bin/postureflow" /usr/local/bin/postureflow
     ln -sf /usr/local/bin/postureflow /usr/bin/postureflow
-    ln -sf postureflow /usr/local/bin/pop-profile
-    ln -sf postureflow /usr/bin/pop-profile
 
     if [ -f "$SCRIPT_DIR/target/release/postureflow-daemon" ]; then
         echo "[*] Installing Rust daemon..."
         install -m 755 "$SCRIPT_DIR/target/release/postureflow-daemon" /usr/local/bin/postureflow-daemon
         ln -sf /usr/local/bin/postureflow-daemon /usr/bin/postureflow-daemon
-        ln -sf postureflow-daemon /usr/local/bin/pop-profile-daemon
-        ln -sf postureflow-daemon /usr/bin/pop-profile-daemon
     fi
     if [ -f "$SCRIPT_DIR/target/release/postureflow-applet" ]; then
         echo "[*] Installing Status Bar / COSMIC Applet..."
         install -m 755 "$SCRIPT_DIR/target/release/postureflow-applet" /usr/local/bin/postureflow-applet
         ln -sf /usr/local/bin/postureflow-applet /usr/bin/postureflow-applet
-        ln -sf postureflow-applet /usr/local/bin/pop-profile-applet
-        ln -sf postureflow-applet /usr/bin/pop-profile-applet
         ln -sf postureflow-applet /usr/bin/cosmic-applet-postureflow
         ln -sf postureflow-applet /usr/local/bin/cosmic-applet-postureflow
-        ln -sf postureflow-applet /usr/bin/cosmic-applet-popprofile
-        ln -sf postureflow-applet /usr/local/bin/cosmic-applet-popprofile
     fi
     if [ -f "$SCRIPT_DIR/target/release/postureflow-gui" ]; then
         echo "[*] Installing PostureFlow GUI..."
         install -m 755 "$SCRIPT_DIR/target/release/postureflow-gui" /usr/local/bin/postureflow-gui
         ln -sf /usr/local/bin/postureflow-gui /usr/bin/postureflow-gui
-        ln -sf postureflow-gui /usr/local/bin/pop-profile-gui
-        ln -sf postureflow-gui /usr/bin/pop-profile-gui
     fi
 fi
 
-# 2. Ensure custom profiles directories exist
+# 2. Ensure custom profiles directory exists
 mkdir -p /etc/postureflow/profiles.d
-mkdir -p /etc/pop-profile/profiles.d
 
 # 3. Install Desktop Entries & Icons
 install -d /usr/share/applications
@@ -105,17 +83,10 @@ fi
 if [ -f "$SCRIPT_DIR/data/io.github.mzia.PostureFlow.Applet.desktop" ]; then
     install -m 644 "$SCRIPT_DIR/data/io.github.mzia.PostureFlow.Applet.desktop" /usr/share/applications/io.github.mzia.PostureFlow.Applet.desktop
 fi
-if [ -f "$SCRIPT_DIR/data/io.github.mzia.PopProfile.Settings.desktop" ]; then
-    install -m 644 "$SCRIPT_DIR/data/io.github.mzia.PopProfile.Settings.desktop" /usr/share/applications/io.github.mzia.PopProfile.Settings.desktop
-fi
-if [ -f "$SCRIPT_DIR/data/io.github.mzia.PopProfile.Applet.desktop" ]; then
-    install -m 644 "$SCRIPT_DIR/data/io.github.mzia.PopProfile.Applet.desktop" /usr/share/applications/io.github.mzia.PopProfile.Applet.desktop
-fi
 
 if [ -f "$SCRIPT_DIR/data/icons/io.github.mzia.PostureFlow.svg" ]; then
     install -d /usr/share/icons/hicolor/scalable/apps
     install -m 644 "$SCRIPT_DIR/data/icons/io.github.mzia.PostureFlow.svg" /usr/share/icons/hicolor/scalable/apps/io.github.mzia.PostureFlow.svg
-    install -m 644 "$SCRIPT_DIR/data/icons/io.github.mzia.PostureFlow.svg" /usr/share/icons/hicolor/scalable/apps/io.github.mzia.PopProfile.svg
 fi
 
 if command -v update-desktop-database >/dev/null 2>&1; then
@@ -130,7 +101,6 @@ if [ -f "$SCRIPT_DIR/data/postureflow-applet.service" ]; then
     echo "[*] Installing systemd user applet service..."
     install -d /usr/lib/systemd/user
     install -m 644 "$SCRIPT_DIR/data/postureflow-applet.service" /usr/lib/systemd/user/postureflow-applet.service
-    ln -sf postureflow-applet.service /usr/lib/systemd/user/pop-profile-applet.service
 fi
 
 # 5. Install Polkit Policy (Passwordless desktop profile switching)
@@ -145,9 +115,6 @@ if [ -f "$SCRIPT_DIR/data/io.github.mzia.PostureFlow.conf" ]; then
     echo "[*] Installing D-Bus system configuration..."
     install -d /usr/share/dbus-1/system.d
     install -m 644 "$SCRIPT_DIR/data/io.github.mzia.PostureFlow.conf" /usr/share/dbus-1/system.d/io.github.mzia.PostureFlow.conf
-    if [ -f "$SCRIPT_DIR/data/io.github.mzia.PopProfile.conf" ]; then
-        install -m 644 "$SCRIPT_DIR/data/io.github.mzia.PopProfile.conf" /usr/share/dbus-1/system.d/io.github.mzia.PopProfile.conf
-    fi
     # Reload D-Bus configuration
     if command -v systemctl >/dev/null 2>&1; then
         systemctl reload dbus 2>/dev/null || true
@@ -158,7 +125,6 @@ fi
 if [ -f "$SCRIPT_DIR/data/postureflow-daemon.service" ]; then
     echo "[*] Installing systemd daemon service..."
     install -m 644 "$SCRIPT_DIR/data/postureflow-daemon.service" /etc/systemd/system/postureflow-daemon.service
-    ln -sf postureflow-daemon.service /etc/systemd/system/pop-profile-daemon.service
     if command -v systemctl >/dev/null 2>&1; then
         echo "[*] Enabling and restarting postureflow-daemon service..."
         systemctl daemon-reload 2>/dev/null || true
@@ -172,7 +138,6 @@ echo "[*] Installing manual page to /usr/local/share/man/man1/postureflow.1..."
 install -d /usr/local/share/man/man1
 if [ -f "$SCRIPT_DIR/man/postureflow.1" ]; then
     install -m 644 "$SCRIPT_DIR/man/postureflow.1" /usr/local/share/man/man1/postureflow.1
-    ln -sf postureflow.1 /usr/local/share/man/man1/pop-profile.1
 fi
 if command -v mandb >/dev/null 2>&1; then
     mandb -q >/dev/null 2>&1 || true
@@ -182,12 +147,10 @@ fi
 if [ -d /etc/bash_completion.d ]; then
     echo "[*] Installing bash completion..."
     install -m 644 "$SCRIPT_DIR/completions/postureflow.bash" /etc/bash_completion.d/postureflow
-    ln -sf postureflow /etc/bash_completion.d/pop-profile
 fi
 if [ -d /usr/share/zsh/vendor-completions ]; then
     echo "[*] Installing zsh completion..."
     install -m 644 "$SCRIPT_DIR/completions/postureflow.zsh" /usr/share/zsh/vendor-completions/_postureflow
-    ln -sf _postureflow /usr/share/zsh/vendor-completions/_pop-profile
 fi
 
 # 10. Install APT post-upgrade hook for persistence
@@ -195,7 +158,7 @@ echo "[*] Registering APT post-upgrade maintenance hook..."
 mkdir -p /etc/apt/apt.conf.d/
 cat << 'EOF' > /etc/apt/apt.conf.d/99-postureflow-health
 // Automatically maintain PostureFlow security & power profiles after package updates
-DPkg::Post-Invoke { "if [ -x /usr/bin/postureflow ]; then /usr/bin/postureflow >/dev/null 2>&1 || true; elif [ -x /usr/local/bin/postureflow ]; then /usr/local/bin/postureflow >/dev/null 2>&1 || true; elif [ -x /usr/bin/pop-profile ]; then /usr/bin/pop-profile >/dev/null 2>&1 || true; fi"; };
+DPkg::Post-Invoke { "if [ -x /usr/bin/postureflow ]; then /usr/bin/postureflow >/dev/null 2>&1 || true; elif [ -x /usr/local/bin/postureflow ]; then /usr/local/bin/postureflow >/dev/null 2>&1 || true; fi"; };
 EOF
 chmod 644 /etc/apt/apt.conf.d/99-postureflow-health
 # Clean up old hook if present
@@ -207,8 +170,6 @@ if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
     if [ -d "/run/user/$USER_UID" ]; then
         echo "[*] Activating PostureFlow Applet user service for '$SUDO_USER'..."
         sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$USER_UID" systemctl --user daemon-reload >/dev/null 2>&1 || true
-        sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$USER_UID" systemctl --user stop pop-profile-applet.service >/dev/null 2>&1 || true
-        sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$USER_UID" systemctl --user disable pop-profile-applet.service >/dev/null 2>&1 || true
         sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$USER_UID" systemctl --user enable --now postureflow-applet.service >/dev/null 2>&1 || true
     fi
 fi
@@ -238,7 +199,7 @@ if [ "$DEV_MODE" -eq 1 ]; then
     echo "  • Status bar & COSMIC panel applet running"
 fi
 echo "Usage:"
-echo "  postureflow --status         # Check active posture (alias: pop-profile)"
+echo "  postureflow --status         # Check active posture"
 echo "  postureflow --dev            # Switch to Dev profile"
 echo "  postureflow --work           # Switch to Work profile"
 echo "  postureflow --home           # Switch to Home profile"

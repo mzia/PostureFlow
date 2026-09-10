@@ -230,15 +230,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                     MenuAction::OpenInspector => {
                         println!("[*] Launching postureflow-gui in Port Inspector view...");
-                        let mut launched = std::process::Command::new("postureflow-gui")
+                        let launched = std::process::Command::new("postureflow-gui")
                             .arg("--tab")
                             .arg("ports")
                             .spawn();
                         if launched.is_err() {
-                            launched = std::process::Command::new("postureflow-gui").spawn();
-                        }
-                        if launched.is_err() {
-                            let _ = std::process::Command::new("pop-profile-gui").spawn();
+                            let _ = std::process::Command::new("postureflow-gui").spawn();
                         }
                     }
 
@@ -266,18 +263,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                     MenuAction::OpenGui => {
                         println!("[*] Launching postureflow-gui...");
-                        let mut launched = std::process::Command::new("postureflow-gui").spawn();
-                        if launched.is_err() {
-                            launched = std::process::Command::new("pop-profile-gui").spawn();
-                        }
+                        let launched = std::process::Command::new("postureflow-gui").spawn();
                         if let Err(e) = launched {
                             eprintln!("[-] Could not launch postureflow-gui from PATH ({}). Trying exe directory...", e);
                             if let Ok(exe) = std::env::current_exe() {
                                 if let Some(dir) = exe.parent() {
-                                    let mut candidate = dir.join("postureflow-gui");
-                                    if !candidate.exists() {
-                                        candidate = dir.join("pop-profile-gui");
-                                    }
+                                    let candidate = dir.join("postureflow-gui");
                                     if candidate.exists() {
                                         let _ = std::process::Command::new(candidate).spawn();
                                     }

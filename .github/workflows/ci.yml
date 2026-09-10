@@ -25,7 +25,6 @@ jobs:
       - name: Verify Shellcheck syntax
         run: |
           bash -n bin/postureflow
-          bash -n bin/pop-profile
           bash -n install.sh
           bash -n uninstall.sh
           bash -n tests/test_safety.sh

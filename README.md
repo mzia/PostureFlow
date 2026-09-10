@@ -6,11 +6,9 @@
 [![OS: Pop!_OS](https://img.shields.io/badge/OS-Pop!__OS%20%7C%20Ubuntu-orange.svg)](https://system76.com/pop)
 [![Hardware: Framework Laptop](https://img.shields.io/badge/Hardware-Framework%20Laptop-black.svg)](https://frame.work)
 
-> **Dynamic security posture, hardware power, and lifestyle workflow orchestrator for Linux & Pop!_OS laptops.** *(Formerly pop-profile-manager)*
+> **Dynamic security posture, hardware power, and lifestyle workflow orchestrator for Linux & Pop!_OS laptops.**
 
 `PostureFlow` dynamically bridges the gap between paranoid security, frictionless software engineering, and casual entertainment. Switch postures with a single command or status bar click without ever risking lockout from your laptop.
-
-Includes full backwards compatibility for all legacy `pop-profile` commands, paths, and D-Bus interfaces.
 
 ---
 
@@ -60,7 +58,6 @@ postureflow --score          # Calculate real-time Security Posture Score (0-100
 postureflow --ports          # Inspect live listening sockets & process owners
 postureflow --autoflow       # Check autonomous network detection & SSID rules
 ```
-*(Legacy commands like `sudo pop-profile --dev` continue to work seamlessly via automatic compatibility symlinks).*
 
 ---
 
@@ -114,7 +111,7 @@ postureflow --test
 
 ## 🦀 Rust D-Bus Daemon & Polkit Security
 
-`PostureFlow` includes a native Rust system daemon (`postureflow-daemon`) built with [`zbus`](https://crates.io/crates/zbus) providing an asynchronous D-Bus service on `io.github.mzia.PostureFlow` (with full fallback on `io.github.mzia.PopProfile`).
+`PostureFlow` includes a native Rust system daemon (`postureflow-daemon`) built with [`zbus`](https://crates.io/crates/zbus) providing an asynchronous D-Bus service on `io.github.mzia.PostureFlow`.
 
 ### Three-Tier Architecture
 
@@ -127,24 +124,24 @@ postureflow --test
 │  2. Floating Settings GUI (`postureflow-gui`)               │
 │     • COSMIC-styled floating window with tabbed editor      │
 │     • Visual UFW rules, Framework power, TOML import/export │
-│  3. CLI (`postureflow` / `pop-profile`)                     │
+│  3. CLI (`postureflow`)                                     │
 │     • Instant terminal posture switching & status           │
 └──────────────────────────────┬──────────────────────────────┘
-                               │ D-Bus Calls (io.github.mzia.PostureFlow)
-                               ▼
+                                │ D-Bus Calls (io.github.mzia.PostureFlow)
+                                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  SECURITY: Polkit Policy (io.github.mzia.PostureFlow)       │
 │  • 5-Minute Cached Admin Auth (`auth_admin_keep`)           │
 │  • Prompts once on first switch, instant subsequent actions │
 └──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
+                                │
+                                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  PRIVILEGED BACKEND: postureflow-daemon (Rust + zbus)       │
 │  • Emits ProfileChanged signals to update UI components     │
 │  • Declarative TOML scanner (/etc/postureflow/profiles.d)   │
 │  • Safety engine (anti-lockout, loopback, SSH preservation) │
-│  • Dual-registers io.github.mzia.PostureFlow & PopProfile   │
+│  • Registers native io.github.mzia.PostureFlow service      │
 │  • Manages sysctl, UFW, Framework battery, and limits       │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -174,8 +171,6 @@ Desktop profile switching and custom profile imports use Polkit's `auth_admin_ke
 | `GetAutoFlowConfig` | Method | `() -> (s)` | Returns the active `autoflow.toml` configuration content. |
 | `SaveAutoFlowConfig`| Method | `(s) -> ()` | Updates and saves `/etc/postureflow/autoflow.toml`. |
 | `ProfileChanged` | Signal | `(s)` | Broadcasts when a profile switch occurs. |
-
-*(All methods and signals are also mirrored to `io.github.mzia.PopProfile` for legacy integrations).*
 
 ---
 
@@ -219,7 +214,7 @@ postureflow-applet --reset
 * **Profile Sidebar:** Browse built-in profiles and custom configurations with live active badges.
 * **Factory Defaults Reset**: One-click **`🔄 Reset to Factory Defaults`** with safety confirmation dialog to immediately restore unmanaged out-of-the-box settings (UFW disabled, balanced power profile, battery 100%, and default 15-minute idle delay).
 * **1-Click Import & Export:**
-  - **`📥 Import Config`**: Pick any `.postureflow.toml` or `.pop-profile.toml` file to inspect, validate, and install.
+  - **`📥 Import Config`**: Pick any `.postureflow.toml` file to inspect, validate, and install.
   - **`📤 Export Config`**: Export custom or built-in profiles to share with teammates.
 * **Tabbed Visual Editor:**
   - **General:** Profile ID, Name, Description, and Category tags.
@@ -233,7 +228,7 @@ postureflow-applet --reset
 
 ## 📝 Custom Profiles & Declarative TOML Schema
 
-Custom profiles are stored as `.postureflow.toml` (or legacy `.pop-profile.toml`) files in `/etc/postureflow/profiles.d/` (system-wide) or `~/.config/postureflow/profiles.d/` (user-specific).
+Custom profiles are stored as `.postureflow.toml` files in `/etc/postureflow/profiles.d/` (system-wide) or `~/.config/postureflow/profiles.d/` (user-specific).
 
 ### Example Configuration: `ai-lab.postureflow.toml`
 
@@ -294,7 +289,6 @@ Whenever an `apt upgrade`, kernel update, or patch finishes installing, the hook
 * **Manual Page:**
   ```bash
   man postureflow
-  man pop-profile
   ```
 * **Shell Completions:** Automatically installed for **Bash** (`/etc/bash_completion.d/postureflow`) and **Zsh** (`/usr/share/zsh/vendor-completions/_postureflow`).
 
@@ -303,16 +297,15 @@ Whenever an `apt upgrade`, kernel update, or patch finishes installing, the hook
 ## 📂 Repository Structure
 
 ```text
-pop-profile-manager/
+postureflow/
 ├── bin/
-│   ├── postureflow                  # Standalone CLI executable
-│   └── pop-profile                  # Compatibility symlink to postureflow
+│   └── postureflow                  # Standalone CLI executable
 ├── src/
 │   ├── lib.rs                       # Shared library modules
 │   ├── main.rs                      # Rust D-Bus daemon entrypoint
 │   ├── profile.rs                   # Profile enum & icon mappings
 │   ├── system.rs                    # System controller (sysctl, ufw, limits, power)
-│   ├── dbus.rs                      # Dual zbus D-Bus services (PostureFlow + PopProfile)
+│   ├── dbus.rs                      # Native zbus D-Bus service (PostureFlow)
 │   ├── config/                      # Declarative profile engine
 │   │   ├── mod.rs                   # Built-in profile definitions & directory scanner
 │   │   ├── schema.rs                # Serde TOML schema (firewall, kernel, framework)
@@ -320,12 +313,18 @@ pop-profile-manager/
 │   ├── bin/
 │   │   ├── postureflow-applet.rs    # Top Bar / COSMIC Panel Applet entrypoint
 │   │   └── postureflow-gui.rs       # Floating settings GUI entrypoint
-│   └── applet/
-│       ├── mod.rs                   # Applet module definitions
-│       ├── state.rs                 # Thread-safe profile state manager
-│       ├── client.rs                # System daemon proxy & notifications
-│       ├── menu.rs                  # com.canonical.dbusmenu provider
-│       └── sni.rs                   # org.kde.StatusNotifierItem provider
+│   ├── applet/
+│   │   ├── mod.rs                   # Applet module definitions
+│   │   ├── state.rs                 # Thread-safe profile state manager
+│   │   ├── client.rs                # System daemon proxy & notifications
+│   │   ├── menu.rs                  # com.canonical.dbusmenu provider
+│   │   └── sni.rs                   # org.kde.StatusNotifierItem provider
+│   ├── inspector/                   # Security auditing & socket inspector
+│   │   ├── mod.rs                   # Inspector module definition
+│   │   ├── ports.rs                 # Live socket inspection & process resolution
+│   │   └── score.rs                 # 100-point security scoring engine
+│   └── autoflow/                    # Autonomous context engine
+│       └── mod.rs                   # NetworkManager D-Bus / SSID event watcher
 ├── data/
 │   ├── io.github.mzia.PostureFlow.desktop         # Floating GUI settings desktop entry
 │   ├── io.github.mzia.PostureFlow.Applet.desktop  # Top bar panel applet desktop entry
@@ -335,8 +334,7 @@ pop-profile-manager/
 │   ├── postureflow-applet.service                 # Systemd user session autostart service
 │   ├── postureflow-daemon.service                 # Systemd privileged system service
 │   ├── io.github.mzia.PostureFlow.policy          # Polkit 5-min cached admin authorization
-│   ├── io.github.mzia.PostureFlow.conf            # D-Bus system bus permissions
-│   └── io.github.mzia.PopProfile.conf             # Legacy D-Bus compatibility configuration
+│   └── io.github.mzia.PostureFlow.conf            # D-Bus system bus permissions
 ├── io.github.mzia.PostureFlow.yml                 # Flatpak application manifest
 ├── man/
 │   └── postureflow.1                              # Native Linux manual page
@@ -370,7 +368,7 @@ pop-profile-manager/
 - [x] **Phase 1: CLI & Rust D-Bus Daemon**
   - [x] 4 lifestyle/context profiles (Home, Work, Dev, Travel)
   - [x] Anti-lockout invariant test suite
-  - [x] Rust daemon with `zbus` on `io.github.mzia.PostureFlow` & `io.github.mzia.PopProfile`
+  - [x] Rust daemon with `zbus` on `io.github.mzia.PostureFlow`
   - [x] Polkit policy with 5-minute cached admin authorization (`auth_admin_keep`)
   - [x] APT post-upgrade self-healing hook
 - [x] **Phase 2: Packaging & Distribution**
@@ -404,9 +402,11 @@ pop-profile-manager/
   - [x] Zero-dependency offline cargo sources generator (`scripts/generate_cargo_sources.py`)
   - [x] Automated builder & packager (`scripts/build_flatpak.sh` / `make flatpak`)
   - [x] Automated GitHub Actions Flatpak CI workflow (`.github/workflows/flatpak.yml`)
-- [x] **Phase 7: Project Evolution & Rebranding**
-  - [x] Transition project name from `pop-profile-manager` to `PostureFlow`
-  - [x] Full backwards compatibility for legacy `pop-profile` binaries, configurations, and D-Bus interfaces
+- [x] **Phase 7: Autonomous Context & Security Cockpit**
+  - [x] Reactive Auto-Flow autonomous network watcher daemon
+  - [x] Live socket inspector with process identification and exposure classification
+  - [x] 100-point security posture scoring engine (Cockpit tab in GUI)
+  - [x] Full codebase refactoring to pure PostureFlow architecture
 
 ---
 
