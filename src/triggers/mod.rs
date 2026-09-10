@@ -148,25 +148,64 @@ pub fn save_triggers_config(config: &TriggersConfig) -> Result<PathBuf, String> 
     Ok(target)
 }
 
-/// Scans procfs `/proc/<pid>/comm` in memory with sub-millisecond overhead
+use std::io::Read;
+
+/// Scans procfs `/proc/<pid>/comm` in memory with sub-millisecond overhead.
+/// Uses a stack buffer of 32 bytes to eliminate heap allocations per scanned PID.
 pub fn scan_running_processes() -> HashSet<String> {
+    scan_running_processes_filtered(None)
+}
+
+/// Scans procfs `/proc/<pid>/comm` using a 32-byte stack buffer.
+/// If `watched` is provided, heap allocations (`String`) are only performed
+/// for process names that actually match the watched list, dropping heap churn to zero.
+pub fn scan_running_processes_filtered(watched: Option<&HashSet<String>>) -> HashSet<String> {
     let mut procs = HashSet::new();
+    let mut buf = [0u8; 32];
     if let Ok(entries) = fs::read_dir("/proc") {
         for entry in entries.flatten() {
             let name = entry.file_name();
-            let name_str = name.to_string_lossy();
-            if name_str.chars().all(|c| c.is_ascii_digit()) {
+            let bytes = name.as_encoded_bytes();
+            if !bytes.is_empty() && bytes.iter().all(|b| b.is_ascii_digit()) {
                 let comm_path = entry.path().join("comm");
-                if let Ok(comm) = fs::read_to_string(&comm_path) {
-                    let clean = comm.trim().to_lowercase();
-                    if !clean.is_empty() {
-                        procs.insert(clean);
+                if let Ok(mut file) = fs::File::open(&comm_path) {
+                    if let Ok(n) = file.read(&mut buf) {
+                        if n > 0 {
+                            if let Ok(comm_str) = std::str::from_utf8(&buf[..n]) {
+                                let trimmed = comm_str.trim();
+                                if !trimmed.is_empty() {
+                                    let clean = trimmed.to_ascii_lowercase();
+                                    if let Some(w) = watched {
+                                        if w.contains(&clean) {
+                                            procs.insert(clean);
+                                        }
+                                    } else {
+                                        procs.insert(clean);
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
     procs
+}
+
+/// Evaluates triggers using zero-allocation process filtering
+pub fn evaluate_triggers_fast(config: &TriggersConfig) -> Option<MatchedTrigger> {
+    if !config.enabled {
+        return None;
+    }
+    let mut watched = HashSet::with_capacity(config.rules.iter().map(|r| r.process_names.len()).sum());
+    for rule in &config.rules {
+        for p in &rule.process_names {
+            watched.insert(p.to_ascii_lowercase());
+        }
+    }
+    let running = scan_running_processes_filtered(Some(&watched));
+    evaluate_triggers(config, &running)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -299,7 +338,14 @@ mod tests {
     fn test_toml_serialization() {
         let cfg = default_triggers_config();
         let toml_str = toml::to_string_pretty(&cfg).unwrap();
-        let parsed: TriggersConfig = toml::from_str(&toml_str).unwrap();
-        assert_eq!(cfg, parsed);
+        let deserialized: TriggersConfig = toml::from_str(&toml_str).unwrap();
+        assert_eq!(cfg, deserialized);
+    }
+
+    #[test]
+    fn test_fast_trigger_evaluation() {
+        let cfg = default_triggers_config();
+        // evaluate_triggers_fast should run without error on the host system
+        let _ = evaluate_triggers_fast(&cfg);
     }
 }

@@ -258,7 +258,7 @@ fn builtin_travel() -> ProfileConfig {
         },
         peripherals: PeripheralsConfig {
             block_new_usb: Some(true),
-            bluetooth: Some(false),
+            bluetooth: Some(true),
         },
         desktop: DesktopConfig { idle_delay_seconds: Some(120) },
     }

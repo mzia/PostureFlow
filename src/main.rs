@@ -373,21 +373,28 @@ async fn run_daemon(session_bus: bool) -> Result<(), Box<dyn Error>> {
     tokio::spawn(async move {
         println!("[+] App-Aware Dynamic Triggers background monitor activated.");
         let mut session = triggers::TriggerSession::default();
+        let mut cached_cfg = triggers::load_triggers_config();
+        let mut last_mtime = std::fs::metadata(triggers::triggers_config_path()).and_then(|m| m.modified()).ok();
 
         loop {
-            let cfg = triggers::load_triggers_config();
-            let interval = cfg.check_interval_seconds.max(1);
+            // Check mtime to avoid unnecessary disk I/O on every tick
+            let current_mtime = std::fs::metadata(triggers::triggers_config_path()).and_then(|m| m.modified()).ok();
+            if current_mtime != last_mtime {
+                cached_cfg = triggers::load_triggers_config();
+                last_mtime = current_mtime;
+            }
+
+            let interval = cached_cfg.check_interval_seconds.max(1);
             tokio::time::sleep(tokio::time::Duration::from_secs(interval)).await;
 
-            if !cfg.enabled {
+            if !cached_cfg.enabled {
                 if session.active_rule_name.is_some() {
                     revert_trigger_session(&mut session, &service_triggers, &conn_triggers, &app_trigger_flag_triggers).await;
                 }
                 continue;
             }
 
-            let running = triggers::scan_running_processes();
-            let matched = triggers::evaluate_triggers(&cfg, &running);
+            let matched = triggers::evaluate_triggers_fast(&cached_cfg);
 
             match (session.active_rule_name.clone(), matched) {
                 (None, Some(m)) => {
@@ -415,19 +422,27 @@ async fn run_daemon(session_bus: bool) -> Result<(), Box<dyn Error>> {
         println!("[+] Circadian Schedule & Battery background monitor activated.");
         let mut last_applied_profile = String::new();
         let mut was_emergency = false;
+        let mut cached_cfg = schedule::load_schedule_config();
+        let mut last_mtime = std::fs::metadata(schedule::schedule_config_path()).and_then(|m| m.modified()).ok();
 
         loop {
-            let cfg = schedule::load_schedule_config();
-            let interval = cfg.check_interval_seconds.max(5);
+            // Check mtime to avoid unnecessary disk I/O on every tick
+            let current_mtime = std::fs::metadata(schedule::schedule_config_path()).and_then(|m| m.modified()).ok();
+            if current_mtime != last_mtime {
+                cached_cfg = schedule::load_schedule_config();
+                last_mtime = current_mtime;
+            }
+
+            let interval = cached_cfg.check_interval_seconds.max(5);
             tokio::time::sleep(tokio::time::Duration::from_secs(interval)).await;
 
-            if !cfg.enabled {
+            if !cached_cfg.enabled {
                 continue;
             }
 
             let now = schedule::get_current_local_time();
             let battery = schedule::get_battery_status();
-            let decision = schedule::evaluate_schedule(&cfg, &now, &battery);
+            let decision = schedule::evaluate_schedule(&cached_cfg, &now, &battery);
 
             match decision {
                 Some(schedule::ScheduleDecision::BatteryEmergency {

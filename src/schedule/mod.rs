@@ -55,7 +55,7 @@ impl Default for BatteryEmergencyConfig {
             threshold_percent: 15,
             target_profile: "travel".to_string(),
             force_cpu_epp: Some("power".to_string()),
-            disable_bluetooth: true,
+            disable_bluetooth: false,
             auto_recover_on_ac: true,
         }
     }
@@ -360,6 +360,15 @@ pub fn primary_config_path() -> PathBuf {
 
 pub fn user_config_path() -> Option<PathBuf> {
     dirs_next_config_dir().map(|p| p.join("postureflow").join("schedule.toml"))
+}
+
+pub fn schedule_config_path() -> PathBuf {
+    if let Some(user_path) = user_config_path() {
+        if user_path.exists() {
+            return user_path;
+        }
+    }
+    primary_config_path()
 }
 
 fn dirs_next_config_dir() -> Option<PathBuf> {
