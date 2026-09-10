@@ -655,10 +655,14 @@ mod tests {
     #[test]
     fn test_profile_display_and_icons() {
         assert_eq!(Profile::Home.as_str(), "home");
-        assert_eq!(Profile::Home.icon_name(), "user-home-symbolic");
-        assert_eq!(Profile::Work.icon_name(), "applications-office-symbolic");
-        assert_eq!(Profile::Dev.icon_name(), "utilities-terminal-symbolic");
+        assert_eq!(Profile::Home.icon_name(), "postureflow-home-symbolic");
+        assert_eq!(Profile::Home.fallback_icon_name(), "user-home-symbolic");
+        assert_eq!(Profile::Work.icon_name(), "postureflow-work-symbolic");
+        assert_eq!(Profile::Work.fallback_icon_name(), "applications-office-symbolic");
+        assert_eq!(Profile::Dev.icon_name(), "postureflow-dev-symbolic");
+        assert_eq!(Profile::Dev.fallback_icon_name(), "utilities-terminal-symbolic");
         assert_eq!(Profile::Travel.as_str(), "travel");
-        assert_eq!(Profile::Travel.icon_name(), "security-high-symbolic");
+        assert_eq!(Profile::Travel.icon_name(), "postureflow-travel-symbolic");
+        assert_eq!(Profile::Travel.fallback_icon_name(), "security-high-symbolic");
     }
 }

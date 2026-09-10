@@ -100,6 +100,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     println!("[+] Registered D-Bus interfaces at {} and {}", SNI_OBJECT_PATH, MENU_OBJECT_PATH);
 
+    // Request well-known session bus name
+    let _ = session_conn.request_name("io.github.mzia.PostureFlow.Applet").await;
+
     // Register with StatusNotifierWatcher
     register_with_watcher(&session_conn).await;
 

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- PostureFlow Shield Background -->
+  <path d="M 12 2 L 4 5 L 4 11.5 C 4 16.5 7.4 20.9 12 22 C 16.6 20.9 20 16.5 20 11.5 L 20 5 Z" 
+        fill="#EF4444" fill-opacity="0.22" stroke="#EF4444" stroke-width="1.8" stroke-linejoin="round"/>
+  <!-- High-Security Padlock Shackle -->
+  <path d="M 9 10.5 L 9 8.5 C 9 6.8 10.3 5.5 12 5.5 C 13.7 5.5 15 6.8 15 8.5 L 15 10.5" 
+        fill="none" stroke="#EF4444" stroke-width="1.6" stroke-linecap="round"/>
+  <!-- Padlock Body -->
+  <rect x="7.5" y="10.5" width="9" height="7" rx="1.5" fill="#EF4444"/>
+  <!-- Keyhole -->
+  <circle cx="12" cy="13" r="1" fill="#141920"/>
+  <path d="M 11.5 13.5 L 12.5 13.5 L 12.8 15.5 L 11.2 15.5 Z" fill="#141920"/>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- PostureFlow Shield -->
+  <path d="M 12 2 L 4 5 L 4 11.5 C 4 16.5 7.4 20.9 12 22 C 16.6 20.9 20 16.5 20 11.5 L 20 5 Z" 
+        fill="#48B9C7" fill-opacity="0.22" stroke="#48B9C7" stroke-width="1.8" stroke-linejoin="round"/>
+  <!-- Energy Core Lightning Bolt -->
+  <path d="M 12.5 6.5 L 9 12 L 12 12 L 11.5 17.5 L 15 11.5 L 12 11.5 Z" 
+        fill="#FAA732"/>
+</svg>

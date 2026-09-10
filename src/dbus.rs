@@ -346,10 +346,12 @@ async fn check_posture_auth(
         Err(_) => return Ok(()),
     };
 
-    let subject = (
-        "system-bus-name",
-        std::collections::HashMap::from([("name".to_string(), sender_name)]),
+    let mut subject_details = std::collections::HashMap::new();
+    subject_details.insert(
+        "name".to_string(),
+        zbus::zvariant::Value::from(sender_name),
     );
+    let subject = ("system-bus-name", subject_details);
 
     let details: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let flags: u32 = 1; // AllowUserInteraction

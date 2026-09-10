@@ -45,7 +45,7 @@ impl StatusNotifierItem {
 
     #[zbus(property)]
     async fn icon_theme_path(&self) -> &str {
-        ""
+        "/usr/share/icons/hicolor/scalable/status"
     }
 
     #[zbus(property)]
@@ -66,7 +66,8 @@ impl StatusNotifierItem {
 
     #[zbus(property)]
     async fn icon_pixmap(&self) -> Vec<(i32, i32, Vec<u8>)> {
-        Vec::new()
+        let state = self.state.read().await;
+        crate::applet::pixmap::get_icon_pixmap(state.active_profile)
     }
 
     #[zbus(property)]
@@ -97,10 +98,27 @@ impl StatusNotifierItem {
     #[zbus(property)]
     async fn tool_tip(&self) -> (String, Vec<(i32, i32, Vec<u8>)>, String, String) {
         let state = self.state.read().await;
-        let icon = state.active_profile.icon_name().to_string();
-        let title = format!("PostureFlow: {}", state.active_profile.as_str().to_uppercase());
-        let desc = format!("{}\nClick to cycle context profile.", state.active_profile.display_name());
-        (icon, Vec::new(), title, desc)
+        let profile = state.active_profile;
+        let icon = profile.icon_name().to_string();
+        let pixmaps = crate::applet::pixmap::get_icon_pixmap(profile);
+        let title = format!("PostureFlow [{}]", profile.as_str().to_uppercase());
+
+        let score = crate::inspector::PostureScoreReport::compute();
+        let autoflow_cfg = crate::autoflow::load_autoflow_config();
+        let triggers_cfg = crate::triggers::load_triggers_config();
+        let sched_cfg = crate::schedule::load_schedule_config();
+
+        let desc = format!(
+            "Mode: {}\nPosture Score: {}% [{}]\nAuto-Flow: {}\nApp Triggers: {}\nCircadian Schedule: {}\n\nLeft-click: cycle profile\nRight-click: open menu",
+            profile.display_name(),
+            score.total_score,
+            score.letter_grade,
+            if autoflow_cfg.enabled { "Active" } else { "Disabled" },
+            if triggers_cfg.enabled { "Active" } else { "Disabled" },
+            if sched_cfg.enabled { "Active" } else { "Disabled" },
+        );
+
+        (icon, pixmaps, title, desc)
     }
 
     async fn context_menu(&self, _x: i32, _y: i32) {

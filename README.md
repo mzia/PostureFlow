@@ -251,18 +251,25 @@ flowchart TD
 
 ---
 
-## 🖥️ Desktop Top Bar & COSMIC Panel Applet
+## 🖥️ System Tray Indicator & COSMIC / Ubuntu Desktop Panel Applet
 
-`postureflow-applet` integrates directly into the **Pop!_OS COSMIC desktop panel** and standard Freedesktop system trays:
+`postureflow-applet` integrates natively into both the **Pop!_OS COSMIC desktop panel** (`cosmic-applet-status-area`) and standard **Ubuntu Desktop** (GNOME Shell with `gnome-shell-extension-appindicator` / Ayatana AppIndicator):
 
-* **Real-time Symbolic Icons:** Automatically synchronizes with your active profile:
-  - 🏠 **Home:** `user-home-symbolic`
-  - 💼 **Work:** `applications-office-symbolic`
-  - 💻 **Dev:** `utilities-terminal-symbolic`
-  - ✈️ **Travel:** `security-high-symbolic` (alias: `secure`)
-* **One-Click Native Popover Menu:** Powered by the standard `com.canonical.dbusmenu` protocol, rendered natively inside the panel using your active desktop theme and accent colors.
-* **Instant Profile Cycling:** Left-click the panel icon directly to cycle instantly through profiles (`Home` ➔ `Work` ➔ `Dev` ➔ `Travel`).
-* **Direct GUI Launcher:** Click **`⚙ Configure Profiles & Import...`** to open the floating settings GUI.
+* **Dedicated Custom Status Icons:** Automatically synchronizes with your active posture using dedicated high-contrast SVGs installed in `/usr/share/icons/hicolor/scalable/status/`:
+  - 🏠 **Home:** `postureflow-home-symbolic` (Emerald Green badge & hearth)
+  - 💼 **Work:** `postureflow-work-symbolic` (Sapphire Blue badge & workstation)
+  - 💻 **Dev:** `postureflow-dev-symbolic` (Amber Gold badge & code prompt `<_>`)
+  - ✈️ **Travel:** `postureflow-travel-symbolic` (Crimson Red badge & lockdown shackle)
+* **Universal ARGB32 Pixmap Rendering:** Supplies built-in 24x24 and 32x32 raw ARGB32 pixmaps directly over D-Bus via `StatusNotifierItem`. Guarantees crisp, pixel-perfect rendering across COSMIC, Ubuntu GNOME, KDE Plasma, and Wayland bars without depending on external theme caches.
+* **Rich Live Status Hover Tooltip:** Hovering over the tray indicator displays real-time posture status:
+  - Active Context Profile (`[HOME]`, `[WORK]`, `[DEV]`, `[TRAVEL]`)
+  - Real-time Posture & Security Score (`92% [A+]`)
+  - Auto-Flow Network Detection status & current SSID
+  - App-Aware Process Triggers status
+  - Circadian Schedule & Battery Guard status
+* **One-Click Native Popover Menu:** Powered by the standard `com.canonical.dbusmenu` protocol, rendered natively inside the panel using your desktop's theme and accent colors.
+* **Instant Profile Cycling:** Left-click the panel indicator directly to cycle through profiles (`Home` ➔ `Work` ➔ `Dev` ➔ `Travel`). Local desktop sessions are authorized via Polkit without disruptive password prompts.
+* **Direct GUI Launcher:** Click **`🔌 Open Port Inspector & Cockpit...`** or **`⚙ Configure Profiles & Import...`** to launch the settings interface.
 * **Desktop Notifications:** Dispatches native notifications on profile changes and security posture audits via `org.freedesktop.Notifications`.
 * **Resilient Watchdog:** Automatically reconnects and re-registers whenever the desktop shell or session restarts.
 * **Session Autostart:** Ships with a systemd user service (`postureflow-applet.service`) and standard desktop entry (`io.github.mzia.PostureFlow.Applet.desktop`).

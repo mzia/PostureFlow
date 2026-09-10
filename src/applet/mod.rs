@@ -2,6 +2,7 @@ pub mod state;
 pub mod client;
 pub mod menu;
 pub mod sni;
+pub mod pixmap;
 
 pub use state::{AppState, SharedState};
 pub use client::DaemonClient;

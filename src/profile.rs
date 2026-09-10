@@ -41,6 +41,15 @@ impl Profile {
 
     pub fn icon_name(&self) -> &'static str {
         match self {
+            Profile::Home => "postureflow-home-symbolic",
+            Profile::Work => "postureflow-work-symbolic",
+            Profile::Dev => "postureflow-dev-symbolic",
+            Profile::Travel => "postureflow-travel-symbolic",
+        }
+    }
+
+    pub fn fallback_icon_name(&self) -> &'static str {
+        match self {
             Profile::Home => "user-home-symbolic",
             Profile::Work => "applications-office-symbolic",
             Profile::Dev => "utilities-terminal-symbolic",
