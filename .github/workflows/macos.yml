@@ -1,0 +1,36 @@
+name: macOS Swift CI & Tests
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'macos/**'
+      - '.github/workflows/macos.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'macos/**'
+      - '.github/workflows/macos.yml'
+
+jobs:
+  test-macos:
+    name: Build & Test on macOS
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode Version
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Verify Swift Version
+        run: swift --version
+
+      - name: Build macOS Targets
+        working-directory: macos
+        run: swift build -v
+
+      - name: Run Swift Unit Tests
+        working-directory: macos
+        run: swift test -v
