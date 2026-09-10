@@ -27,9 +27,9 @@
   </description>
 
   <launchable type="desktop-id">io.github.mzia.PostureFlow.desktop</launchable>
-  <url type="homepage">https://github.com/mzia/pop-profile-manager</url>
-  <url type="bugtracker">https://github.com/mzia/pop-profile-manager/issues</url>
-  <url type="vcs-browser">https://github.com/mzia/pop-profile-manager</url>
+  <url type="homepage">https://github.com/mzia/PostureFlow</url>
+  <url type="bugtracker">https://github.com/mzia/PostureFlow/issues</url>
+  <url type="vcs-browser">https://github.com/mzia/PostureFlow</url>
 
   <provides>
     <binary>postureflow-gui</binary>
@@ -40,7 +40,7 @@
   <screenshots>
     <screenshot type="default">
       <caption>PostureFlow floating settings and custom profile editor</caption>
-      <image>https://raw.githubusercontent.com/mzia/pop-profile-manager/main/assets/screenshot-gui.png</image>
+      <image>https://raw.githubusercontent.com/mzia/PostureFlow/main/assets/screenshot-gui.png</image>
     </screenshot>
   </screenshots>
 

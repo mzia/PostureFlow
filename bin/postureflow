@@ -3,7 +3,7 @@
 # PostureFlow (postureflow)
 # ==============================================================================
 # Context-aware security, developer, and lifestyle profile manager for Pop!_OS.
-# GitHub: https://github.com/mzia/pop-profile-manager
+# GitHub: https://github.com/mzia/PostureFlow
 # ==============================================================================
 
 set -eo pipefail

@@ -1,6 +1,6 @@
 # PostureFlow
 
-[![CI Safety & D-Bus Tests](https://github.com/mzia/pop-profile-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/mzia/pop-profile-manager/actions/workflows/ci.yml)
+[![CI Safety & D-Bus Tests](https://github.com/mzia/PostureFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/mzia/PostureFlow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Rust: 1.80+](https://img.shields.io/badge/Rust-1.80%2B-red.svg)](https://www.rust-lang.org)
 [![OS: Pop!_OS](https://img.shields.io/badge/OS-Pop!__OS%20%7C%20Ubuntu-orange.svg)](https://system76.com/pop)
@@ -16,7 +16,7 @@
 
 ### Option 1: Install via Pre-Built Debian Package (Recommended)
 
-Download the latest `.deb` from [GitHub Releases](https://github.com/mzia/pop-profile-manager/releases) and install:
+Download the latest `.deb` from [GitHub Releases](https://github.com/mzia/PostureFlow/releases) and install:
 ```bash
 sudo dpkg -i dist/postureflow_1.0.0_amd64.deb
 ```
@@ -24,8 +24,8 @@ sudo dpkg -i dist/postureflow_1.0.0_amd64.deb
 ### Option 2: Install from Source
 
 ```bash
-git clone https://github.com/mzia/pop-profile-manager.git
-cd pop-profile-manager
+git clone https://github.com/mzia/PostureFlow.git
+cd PostureFlow
 
 # Build Rust binaries and Debian package
 make deb

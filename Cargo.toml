@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["M. Zia"]
 description = "PostureFlow: Context-aware security, developer, and lifestyle posture manager"
 license = "MIT"
-repository = "https://github.com/mzia/pop-profile-manager"
+repository = "https://github.com/mzia/PostureFlow"
 
 [lib]
 name = "postureflow"

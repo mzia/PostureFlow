@@ -4,7 +4,7 @@
  "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
 <policyconfig>
   <vendor>PostureFlow</vendor>
-  <vendor_url>https://github.com/mzia/pop-profile-manager</vendor_url>
+  <vendor_url>https://github.com/mzia/PostureFlow</vendor_url>
 
   <action id="io.github.mzia.PostureFlow.set-profile">
     <description>Change system security posture</description>
