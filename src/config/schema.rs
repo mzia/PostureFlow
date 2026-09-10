@@ -86,6 +86,16 @@ pub struct FrameworkPowerConfig {
     pub battery_charge_limit: Option<u32>,
     #[serde(default)]
     pub power_profile: Option<String>,
+    #[serde(default)]
+    pub cpu_epp: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct PeripheralsConfig {
+    #[serde(default)]
+    pub block_new_usb: Option<bool>,
+    #[serde(default)]
+    pub bluetooth: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -105,6 +115,8 @@ pub struct ProfileConfig {
     pub firewall: FirewallConfig,
     #[serde(default)]
     pub power: FrameworkPowerConfig,
+    #[serde(default)]
+    pub peripherals: PeripheralsConfig,
     #[serde(default)]
     pub desktop: DesktopConfig,
 }

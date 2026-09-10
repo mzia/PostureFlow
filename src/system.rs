@@ -218,8 +218,89 @@ pub fn apply_profile_config(config: &crate::config::ProfileConfig) -> Result<(),
             });
     }
 
+    // 6. Deep Hardware & Display Power Orchestration
+    if let Some(ref epp) = config.power.cpu_epp {
+        let _ = apply_cpu_epp(epp);
+    }
+    if let Some(block_new_usb) = config.peripherals.block_new_usb {
+        let _ = apply_usb_lockdown(block_new_usb);
+    }
+    if let Some(bt) = config.peripherals.bluetooth {
+        let _ = apply_bluetooth(bt);
+    }
+
     save_active_profile_str(&config.profile.id)?;
     Ok(())
+}
+
+pub fn apply_cpu_epp(preference: &str) -> Result<(), String> {
+    if let Ok(entries) = fs::read_dir("/sys/devices/system/cpu/cpufreq") {
+        for entry in entries.flatten() {
+            let path = entry.path().join("energy_performance_preference");
+            if path.exists() {
+                let _ = fs::write(&path, preference.trim());
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn get_cpu_epp() -> Option<String> {
+    if let Ok(val) = fs::read_to_string("/sys/devices/system/cpu/cpufreq/policy0/energy_performance_preference") {
+        let trimmed = val.trim().to_string();
+        if !trimmed.is_empty() {
+            return Some(trimmed);
+        }
+    }
+    None
+}
+
+pub fn apply_usb_lockdown(block_new: bool) -> Result<(), String> {
+    let val = if block_new { "0" } else { "1" };
+    if let Ok(entries) = fs::read_dir("/sys/bus/usb/devices") {
+        for entry in entries.flatten() {
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            if file_name.starts_with("usb") {
+                let path = entry.path().join("authorized_default");
+                if path.exists() {
+                    let _ = fs::write(&path, val);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn is_usb_locked_down() -> bool {
+    if let Ok(entries) = fs::read_dir("/sys/bus/usb/devices") {
+        for entry in entries.flatten() {
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            if file_name.starts_with("usb") {
+                let path = entry.path().join("authorized_default");
+                if let Ok(val) = fs::read_to_string(&path) {
+                    if val.trim() == "0" {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+pub fn apply_bluetooth(enabled: bool) -> Result<(), String> {
+    if enabled {
+        let _ = execute("rfkill", &["unblock", "bluetooth"]);
+    } else {
+        let _ = execute("rfkill", &["block", "bluetooth"]);
+    }
+    Ok(())
+}
+
+pub fn is_bluetooth_blocked() -> bool {
+    execute("rfkill", &["list", "bluetooth"])
+        .map(|out| out.contains("Soft blocked: yes") || out.contains("Hard blocked: yes"))
+        .unwrap_or(false)
 }
 
 pub fn reset_to_defaults() -> Result<(), String> {
@@ -257,6 +338,15 @@ pub fn reset_to_defaults() -> Result<(), String> {
                 .map_err(|e| e.to_string())
         });
 
+    // Restore CPU EPP to factory balanced performance
+    let _ = apply_cpu_epp("balance_performance");
+
+    // Restore USB authorization to standard auto-authorize
+    let _ = apply_usb_lockdown(false);
+
+    // Restore Bluetooth radio to unblocked
+    let _ = apply_bluetooth(true);
+
     Ok(())
 }
 
@@ -266,10 +356,16 @@ pub fn get_status_report() -> String {
     let inotify = execute("sysctl", &["-n", "fs.inotify.max_user_watches"]).unwrap_or_else(|_| "N/A".into());
     let map_count = execute("sysctl", &["-n", "vm.max_map_count"]).unwrap_or_else(|_| "N/A".into());
     let ufw_status = execute("ufw", &["status"]).unwrap_or_else(|_| "inactive".into());
+    let cpu_epp = get_cpu_epp().unwrap_or_else(|| "N/A".into());
+    let usb_lockdown = if is_usb_locked_down() { "ENGAGED (BadUSB Blocked)" } else { "Standard (Auto-authorized)" };
+    let bt_status = if is_bluetooth_blocked() { "Blocked / Radio Off" } else { "Active / Unblocked" };
 
     format!(
-        "Active Profile: {}\nptrace_scope: {}\ninotify watches: {}\nvm.max_map_count: {}\nUFW Status:\n{}",
+        "Active Profile: {}\nCPU EPP Mode:   {}\nUSB Security:   {}\nBluetooth:      {}\nptrace_scope:   {}\ninotify watches:{}\nvm.max_map_count: {}\nUFW Status:\n{}",
         profile.to_uppercase(),
+        cpu_epp,
+        usb_lockdown,
+        bt_status,
         ptrace,
         inotify,
         map_count,

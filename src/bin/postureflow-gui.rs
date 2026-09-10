@@ -2,7 +2,7 @@ use eframe::egui::{self, Color32, CornerRadius, RichText, Stroke};
 use postureflow::autoflow::{self, ActiveNetworkInfo, AutoFlowConfig, NetworkRule};
 use postureflow::config::{
     self, validate_and_sanitize, DesktopConfig, FirewallConfig, FrameworkPowerConfig,
-    ProfileConfig, ProfileMetadata, SecurityLimitsConfig,
+    PeripheralsConfig, ProfileConfig, ProfileMetadata, SecurityLimitsConfig,
 };
 use postureflow::inspector::{self, ListeningPort, PostureScoreReport};
 use postureflow::system;
@@ -944,6 +944,7 @@ impl GuiApp {
                             limits: SecurityLimitsConfig::default(),
                             firewall: FirewallConfig::default(),
                             power: FrameworkPowerConfig::default(),
+                            peripherals: PeripheralsConfig::default(),
                             desktop: DesktopConfig::default(),
                         };
                         let _ = config::save_custom_profile(new_cfg, system::is_privileged());
@@ -1152,6 +1153,43 @@ impl GuiApp {
                             current_profile.power.power_profile = Some(pprof);
                         }
                     });
+
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.label(RichText::new("CPU Energy Performance Preference (EPP)").strong());
+                    let mut epp = current_profile.power.cpu_epp.clone().unwrap_or_else(|| "balance_performance".to_string());
+                    ui.horizontal(|ui| {
+                        ui.label("EPP Scaling Mode:");
+                        egui::ComboBox::from_id_salt("epp_mode_combo")
+                            .selected_text(&epp)
+                            .show_ui(ui, |ui| {
+                                if ui.selectable_value(&mut epp, "performance".to_string(), "🚀 performance (Max Throughput)").clicked() {
+                                    current_profile.power.cpu_epp = Some(epp.clone());
+                                }
+                                if ui.selectable_value(&mut epp, "balance_performance".to_string(), "⚡ balance_performance (Responsive)").clicked() {
+                                    current_profile.power.cpu_epp = Some(epp.clone());
+                                }
+                                if ui.selectable_value(&mut epp, "balance_power".to_string(), "🌱 balance_power (Cool & Quiet)").clicked() {
+                                    current_profile.power.cpu_epp = Some(epp.clone());
+                                }
+                                if ui.selectable_value(&mut epp, "power".to_string(), "🔋 power (Max Battery Life)").clicked() {
+                                    current_profile.power.cpu_epp = Some(epp.clone());
+                                }
+                            });
+                    });
+
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.label(RichText::new("Hardware & Peripherals Security").strong());
+                    let mut block_usb = current_profile.peripherals.block_new_usb.unwrap_or(false);
+                    if ui.add_enabled(!is_builtin, egui::Checkbox::new(&mut block_usb, "🛡️ BadUSB Defense (Block unauthorized new USB devices at kernel level)")).changed() {
+                        current_profile.peripherals.block_new_usb = Some(block_usb);
+                    }
+
+                    let mut bt = current_profile.peripherals.bluetooth.unwrap_or(true);
+                    if ui.add_enabled(!is_builtin, egui::Checkbox::new(&mut bt, "📶 Bluetooth Radio Enabled")).changed() {
+                        current_profile.peripherals.bluetooth = Some(bt);
+                    }
                 }
             }
 

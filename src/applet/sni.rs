@@ -98,7 +98,7 @@ impl StatusNotifierItem {
     async fn tool_tip(&self) -> (String, Vec<(i32, i32, Vec<u8>)>, String, String) {
         let state = self.state.read().await;
         let icon = state.active_profile.icon_name().to_string();
-        let title = format!("Pop! Profile: {}", state.active_profile.as_str().to_uppercase());
+        let title = format!("PostureFlow: {}", state.active_profile.as_str().to_uppercase());
         let desc = format!("{}\nClick to cycle context profile.", state.active_profile.display_name());
         (icon, Vec::new(), title, desc)
     }

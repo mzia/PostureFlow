@@ -142,7 +142,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     println!("[*] Daemon signal: Active profile changed to [{}]", new_profile.as_str().to_uppercase());
                     emit_profile_updated(&session_conn, &state).await;
                     daemon.send_notification(
-                        "Pop! Profile Manager",
+                        "PostureFlow",
                         &format!("Profile switched to [{}]", new_profile.as_str().to_uppercase()),
                         new_profile.icon_name(),
                     ).await;
@@ -161,7 +161,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                         println!("[*] Switching profile to [{}]...", target.as_str().to_uppercase());
                         daemon.send_notification(
-                            "Pop! Profile Manager",
+                            "PostureFlow",
                             &format!("Applying profile: {}...", target.display_name()),
                             target.icon_name(),
                         ).await;
@@ -174,7 +174,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 }
                                 emit_profile_updated(&session_conn, &state).await;
                                 daemon.send_notification(
-                                    "Pop! Profile Manager",
+                                    "PostureFlow",
                                     &format!("Active profile is now [{}]", target.as_str().to_uppercase()),
                                     target.icon_name(),
                                 ).await;
@@ -183,7 +183,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             Err(e) => {
                                 eprintln!("[-] Failed to switch profile: {}", e);
                                 daemon.send_notification(
-                                    "Pop! Profile Error",
+                                    "PostureFlow Error",
                                     &format!("Failed to switch profile: {}", e),
                                     "dialog-error-symbolic",
                                 ).await;
@@ -199,7 +199,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 let summary = lines.join("\n");
                                 let active = state.read().await.active_profile;
                                 daemon.send_notification(
-                                    "Pop! Profile & Power Posture",
+                                    "PostureFlow Posture",
                                     &summary,
                                     active.icon_name(),
                                 ).await;

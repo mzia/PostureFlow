@@ -2,8 +2,8 @@ pub mod schema;
 pub mod validator;
 
 pub use schema::{
-    DesktopConfig, FirewallConfig, FrameworkPowerConfig, PortRule, ProfileConfig, ProfileMetadata,
-    SecurityLimitsConfig,
+    DesktopConfig, FirewallConfig, FrameworkPowerConfig, PeripheralsConfig, PortRule, ProfileConfig,
+    ProfileMetadata, SecurityLimitsConfig,
 };
 pub use validator::{validate_and_sanitize, ValidationReport};
 
@@ -83,6 +83,11 @@ fn builtin_home() -> ProfileConfig {
         power: FrameworkPowerConfig {
             battery_charge_limit: Some(85),
             power_profile: Some("balanced".to_string()),
+            cpu_epp: Some("balance_performance".to_string()),
+        },
+        peripherals: PeripheralsConfig {
+            block_new_usb: Some(false),
+            bluetooth: Some(true),
         },
         desktop: DesktopConfig { idle_delay_seconds: Some(1800) },
     }
@@ -133,6 +138,11 @@ fn builtin_work() -> ProfileConfig {
         power: FrameworkPowerConfig {
             battery_charge_limit: Some(80),
             power_profile: Some("balanced".to_string()),
+            cpu_epp: Some("balance_power".to_string()),
+        },
+        peripherals: PeripheralsConfig {
+            block_new_usb: Some(false),
+            bluetooth: Some(true),
         },
         desktop: DesktopConfig { idle_delay_seconds: Some(300) },
     }
@@ -188,6 +198,11 @@ fn builtin_dev() -> ProfileConfig {
         power: FrameworkPowerConfig {
             battery_charge_limit: Some(85),
             power_profile: Some("performance".to_string()),
+            cpu_epp: Some("performance".to_string()),
+        },
+        peripherals: PeripheralsConfig {
+            block_new_usb: Some(false),
+            bluetooth: Some(true),
         },
         desktop: DesktopConfig { idle_delay_seconds: Some(1800) },
     }
@@ -239,6 +254,11 @@ fn builtin_travel() -> ProfileConfig {
         power: FrameworkPowerConfig {
             battery_charge_limit: Some(80),
             power_profile: Some("battery".to_string()),
+            cpu_epp: Some("power".to_string()),
+        },
+        peripherals: PeripheralsConfig {
+            block_new_usb: Some(true),
+            bluetooth: Some(false),
         },
         desktop: DesktopConfig { idle_delay_seconds: Some(120) },
     }

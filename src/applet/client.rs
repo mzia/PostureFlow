@@ -120,7 +120,7 @@ impl DaemonClient {
             let _: Result<u32, _> = proxy.call(
                 "Notify",
                 &(
-                    "Pop! Profile Manager",
+                    "PostureFlow",
                     0u32,
                     icon,
                     summary,

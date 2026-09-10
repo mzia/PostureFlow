@@ -147,6 +147,18 @@ pub fn validate_and_sanitize(mut config: ProfileConfig) -> Result<ValidationRepo
         }
     }
 
+    // 9. Validate CPU EPP if present
+    if let Some(ref epp) = config.power.cpu_epp {
+        let epp_lower = epp.trim().to_lowercase();
+        if !["default", "performance", "balance_performance", "balance_power", "power"].contains(&epp_lower.as_str()) {
+            return Err(format!(
+                "Invalid cpu_epp '{}'. Expected 'default', 'performance', 'balance_performance', 'balance_power', or 'power'.",
+                epp
+            ));
+        }
+        config.power.cpu_epp = Some(epp_lower);
+    }
+
     Ok(ValidationReport {
         is_valid: true,
         warnings,
@@ -175,6 +187,7 @@ mod tests {
             limits: SecurityLimitsConfig::default(),
             firewall: FirewallConfig::default(),
             power: FrameworkPowerConfig::default(),
+            peripherals: PeripheralsConfig::default(),
             desktop: DesktopConfig::default(),
         }
     }
@@ -244,5 +257,17 @@ mod tests {
             comment: "".to_string(),
         });
         assert!(validate_and_sanitize(cfg).is_err());
+    }
+
+    #[test]
+    fn test_cpu_epp_validation() {
+        let mut cfg = sample_config();
+        cfg.power.cpu_epp = Some("performance".to_string());
+        let res = validate_and_sanitize(cfg.clone());
+        assert!(res.is_ok());
+
+        cfg.power.cpu_epp = Some("invalid_mode".to_string());
+        let res_err = validate_and_sanitize(cfg);
+        assert!(res_err.is_err());
     }
 }

@@ -115,6 +115,10 @@ impl PostureScoreReport {
             _ => limits_score += 2,
         }
 
+        if crate::system::is_usb_locked_down() {
+            recommendations.push("🛡️ BadUSB Defense: Hardware USB auto-authorization is locked down.".to_string());
+        }
+
         let total_score = firewall_score + attack_surface_score + kernel_score + limits_score;
 
         let letter_grade = match total_score {
