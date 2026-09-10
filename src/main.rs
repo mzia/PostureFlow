@@ -305,11 +305,13 @@ async fn run_daemon(session_bus: bool) -> Result<(), Box<dyn Error>> {
     };
 
     println!("[+] D-Bus Service registered at {}", DBUS_INTERFACE);
-    println!("[+] Daemon ready and listening for requests.");
+    // Shared atomic flag indicating if an app trigger is currently active
+    let app_trigger_active = Arc::new(AtomicBool::new(false));
 
     // Spawn reactive Auto-Flow background watcher
     let service_clone = service.clone();
     let conn_clone = connection.clone();
+    let app_trigger_flag_autoflow = app_trigger_active.clone();
     tokio::spawn(async move {
         println!("[+] Auto-Flow background monitor activated.");
         let mut last_applied_profile = String::new();
@@ -334,7 +336,8 @@ async fn run_daemon(session_bus: bool) -> Result<(), Box<dyn Error>> {
             if network_key != last_network_key {
                 last_network_key = network_key;
 
-                if let Some(target_profile) = autoflow::evaluate_posture(&config, &net) {
+                if !app_trigger_flag_autoflow.load(Ordering::SeqCst) {
+                    if let Some(target_profile) = autoflow::evaluate_posture(&config, &net) {
                     let current = service_clone.get_active_profile_str().await;
                     if target_profile != current && target_profile != last_applied_profile {
                         println!(
@@ -359,12 +362,12 @@ async fn run_daemon(session_bus: bool) -> Result<(), Box<dyn Error>> {
                         }
                     }
                 }
+                }
             }
         }
     });
 
-    // Shared atomic flag indicating if an app trigger is currently active
-    let app_trigger_active = Arc::new(AtomicBool::new(false));
+
 
     // Spawn reactive App-Aware Dynamic Triggers background monitor
     let service_triggers = service.clone();

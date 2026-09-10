@@ -138,7 +138,7 @@ fn builtin_work() -> ProfileConfig {
         power: FrameworkPowerConfig {
             battery_charge_limit: Some(80),
             power_profile: Some("balanced".to_string()),
-            cpu_epp: Some("balance_power".to_string()),
+            cpu_epp: Some("balance_performance".to_string()),
         },
         peripherals: PeripheralsConfig {
             block_new_usb: Some(false),

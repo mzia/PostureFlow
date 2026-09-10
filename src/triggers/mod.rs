@@ -89,13 +89,15 @@ pub fn default_triggers_config() -> TriggersConfig {
             process_names: vec![
                 "slack".to_string(),
                 "teams".to_string(),
+                "teams-for-linux".to_string(),
                 "zoom".to_string(),
+                "webex".to_string(),
                 "thunderbird".to_string(),
             ],
             target_profile: Some("work".to_string()),
-            boost_cpu_epp: Some("balance_power".to_string()),
+            boost_cpu_epp: Some("balance_performance".to_string()),
             boost_sysctl: HashMap::new(),
-            comment: Some("Quiet fan acoustics and work VPN/CUPS access during office work".to_string()),
+            comment: Some("Responsive CPU EPP for zero-latency video calls, noise suppression, and corporate VPN access".to_string()),
         },
     ];
 

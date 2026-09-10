@@ -263,6 +263,22 @@ EOF
     ufw --force enable >/dev/null 2>&1
 
     set_desktop_idle_delay 300
+
+    log_info "Optimizing CPU energy performance for responsive video calls & office workloads..."
+    if [ -d /sys/devices/system/cpu/cpufreq ]; then
+        for epp_file in /sys/devices/system/cpu/cpufreq/policy*/energy_performance_preference; do
+            if [ -w "$epp_file" ]; then
+                echo "balance_performance" > "$epp_file" 2>/dev/null || true
+            fi
+        done
+    fi
+    if command -v system76-power >/dev/null 2>&1; then
+        system76-power profile balanced >/dev/null 2>&1 || true
+        system76-power charge-thresholds --max 80 >/dev/null 2>&1 || true
+    elif command -v powerprofilesctl >/dev/null 2>&1; then
+        powerprofilesctl set balanced >/dev/null 2>&1 || true
+    fi
+
     save_state "work"
     log_success "WORK Profile is now ACTIVE!"
 }
