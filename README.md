@@ -442,53 +442,23 @@ postureflow/
 
 ## 🗺️ Project Roadmap
 
-- [x] **Phase 1: CLI & Rust D-Bus Daemon**
-  - [x] 4 lifestyle/context profiles (Home, Work, Dev, Travel)
-  - [x] Anti-lockout invariant test suite
-  - [x] Rust daemon with `zbus` on `io.github.mzia.PostureFlow`
-  - [x] Polkit policy with 5-minute cached admin authorization (`auth_admin_keep`)
-  - [x] APT post-upgrade self-healing hook
-- [x] **Phase 2: Packaging & Distribution**
-  - [x] Debian `.deb` package generation (`scripts/build_deb.sh` / `make deb`)
-  - [x] Standard systemd, Polkit, D-Bus, completions, and man page packaging
-  - [x] Automated GitHub Actions release workflow (`.github/workflows/release.yml`)
-- [x] **Phase 3: Top Bar & COSMIC Panel Applet**
-  - [x] Rust panel applet (`postureflow-applet`) with live status icon
-  - [x] Standard `StatusNotifierItem` + `com.canonical.dbusmenu` architecture
-  - [x] Dynamic symbolic icons matching Pop!_OS / COSMIC desktop theme
-  - [x] Popover dropdown menu with one-click profile switching and power status
-  - [x] Watchdog auto-reconnect on panel / session restarts
-  - [x] Desktop entry and systemd user service
-- [x] **Phase 4: Declarative Custom Profile Engine**
-  - [x] Declarative `.postureflow.toml` schema (metadata, firewall, sysctl, framework power)
-  - [x] Dynamic multi-directory profile scanner (`/etc/postureflow/profiles.d/`, `~/.config/postureflow/profiles.d/`)
-  - [x] Anti-lockout validation & sanitization engine (loopback, eBPF, pipes)
-  - [x] D-Bus API extension (`ListProfiles`, `GetProfileDetails`, `ValidateProfile`, `SaveCustomProfile`, `DeleteCustomProfile`)
-- [x] **Phase 5: Floating Desktop Settings GUI**
-  - [x] Modern styled floating window application (`postureflow-gui`)
-  - [x] Sidebar profile manager with active indicators and 1-click TOML import/export
-  - [x] Interactive tabbed editor (General, Firewall, Kernel, Framework Power)
-  - [x] Live "Test & Verify Safety" pre-flight checks
-  - [x] Direct launcher integration in top bar panel applet menu
-- [x] **Phase 6: Flatpak Distribution**
-  - [x] Flathub-compliant Flatpak manifest (`io.github.mzia.PostureFlow.yml`)
-  - [x] Sandboxed desktop portal integration (Wayland, X11 fallback, DRI, file chooser)
-  - [x] Host system D-Bus portal access (`io.github.mzia.PostureFlow`) for privileged operations
-  - [x] AppStream 1.0 metainfo specification (`data/io.github.mzia.PostureFlow.metainfo.xml`)
-  - [x] Scalable vector application iconography (`data/icons/io.github.mzia.PostureFlow.svg`)
-  - [x] Zero-dependency offline cargo sources generator (`scripts/generate_cargo_sources.py`)
-  - [x] Automated builder & packager (`scripts/build_flatpak.sh` / `make flatpak`)
-  - [x] Automated GitHub Actions Flatpak CI workflow (`.github/workflows/flatpak.yml`)
-- [x] **Phase 7: Autonomous Context, Security Cockpit & Hardware Orchestration**
-  - [x] Reactive Auto-Flow autonomous network watcher daemon
-  - [x] Live socket inspector with process identification and exposure classification
-  - [x] 100-point security posture scoring engine (Cockpit tab in GUI)
-  - [x] Deep Hardware Orchestration: CPU EPP scaling, BadUSB defense, and Bluetooth stealth
-  - [x] App-Aware Dynamic Triggers: Procfs `/proc` scanner, rule manager, and transparent auto-revert state machine
-  - [x] Full codebase refactoring to pure PostureFlow architecture
-- [ ] **Phase 8: Circadian & Scheduled Posture Automation**
-  - [ ] Time-of-day / schedule-based posture transitions (e.g. Work mode 9am-5pm, Home mode evenings)
-  - [ ] Battery-critical emergency power & stealth fallback
+The complete development roadmap, itemized release deliverables, and upcoming initiatives are maintained on the official **[PostureFlow GitHub Wiki: Project Roadmap](https://github.com/mzia/PostureFlow/wiki/Project-Roadmap)**.
+
+### Development Milestones
+
+| Phase | Milestone Name | Status | Key Highlights |
+| :---: | :--- | :---: | :--- |
+| **1** | **CLI & Rust D-Bus Daemon** | ✅ Completed | Anti-lockout engine, Polkit cached auth, sysctl & UFW controller |
+| **2** | **Packaging & Distribution** | ✅ Completed | Debian `.deb` builder, shell completions, man pages, CI workflows |
+| **3** | **Top Bar COSMIC Panel Applet** | ✅ Completed | StatusNotifierItem + DBusMenu, dynamic theme icons, quick switcher |
+| **4** | **Declarative Custom Profiles Engine** | ✅ Completed | Serde TOML schema, multi-directory scanner, anti-lockout validator |
+| **5** | **Floating Desktop Settings GUI** | ✅ Completed | egui/eframe floating window, tabbed profile editor, safety tester |
+| **6** | **Flatpak Sandboxing & Distribution** | ✅ Completed | Flathub-compliant manifest, portals, offline vendored cargo sources |
+| **7** | **Autonomous Context & Hardware Orchestration** | ✅ Completed | Auto-Flow, App Triggers, Port Inspector, Posture Score, CPU EPP & BadUSB |
+| **8** | **Circadian & Scheduled Flow** | ⏳ In Progress | Time-of-day automation, calendar sync, emergency power fallback |
+| **9** | **Enterprise Fleet Sync & Attestation** | 🔮 Planned | Cryptographic posture attestation, Tailscale/WireGuard policy sync |
+
+👉 **Read the complete feature checklists and milestone details in the [PostureFlow Wiki: Project Roadmap](https://github.com/mzia/PostureFlow/wiki/Project-Roadmap).**
 
 ---
 
