@@ -45,7 +45,7 @@ impl StatusNotifierItem {
 
     #[zbus(property)]
     async fn icon_theme_path(&self) -> &str {
-        "/usr/share/icons/hicolor/scalable/status"
+        "/usr/share/icons/hicolor"
     }
 
     #[zbus(property)]
@@ -109,7 +109,7 @@ impl StatusNotifierItem {
         let sched_cfg = crate::schedule::load_schedule_config();
 
         let desc = format!(
-            "Mode: {}\nPosture Score: {}% [{}]\nAuto-Flow: {}\nApp Triggers: {}\nCircadian Schedule: {}\n\nLeft-click: cycle profile\nRight-click: open menu",
+            "Mode: {}\nPosture Score: {}% [{}]\nAuto-Flow: {}\nApp Triggers: {}\nCircadian Schedule: {}\n\nClick: open menu\nScroll: cycle profile",
             profile.display_name(),
             score.total_score,
             score.letter_grade,
@@ -126,13 +126,10 @@ impl StatusNotifierItem {
     }
 
     async fn activate(&self, _x: i32, _y: i32) {
-        // Left click cycles to the next profile
-        let next_profile = {
-            let state = self.state.read().await;
-            state.active_profile.next()
-        };
-        let _ = self.action_tx.send(MenuAction::SwitchProfile(next_profile)).await;
+        // Left click launches GUI settings or shows status rather than mutating profile
+        let _ = self.action_tx.send(MenuAction::OpenGui).await;
     }
+
 
     async fn secondary_activate(&self, _x: i32, _y: i32) {
         let _ = self.action_tx.send(MenuAction::ShowStatus).await;

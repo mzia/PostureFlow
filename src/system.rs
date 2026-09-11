@@ -27,6 +27,15 @@ pub fn state_file_path() -> String {
 }
 
 pub fn get_active_profile() -> String {
+    // 1. Primary source of truth: /etc/postureflow-state (system-wide, world-readable)
+    if let Ok(s) = fs::read_to_string(STATE_FILE) {
+        let trimmed = s.trim().to_string();
+        if !trimmed.is_empty() {
+            return trimmed;
+        }
+    }
+
+    // 2. Fallback to state_file_path()
     let path = state_file_path();
     fs::read_to_string(&path)
         .map(|s| {
@@ -41,14 +50,20 @@ pub fn get_active_profile() -> String {
 }
 
 pub fn save_active_profile_str(name: &str) -> Result<(), String> {
+    if is_privileged() {
+        let _ = fs::write(STATE_FILE, name);
+    }
     let path = state_file_path();
-    fs::write(&path, name)
-        .map_err(|e| format!("Failed to write state file {}: {}", path, e))
+    if path != STATE_FILE {
+        let _ = fs::write(&path, name);
+    }
+    Ok(())
 }
 
 pub fn save_active_profile(profile: Profile) -> Result<(), String> {
     save_active_profile_str(profile.as_str())
 }
+
 
 fn execute(cmd: &str, args: &[&str]) -> Result<String, String> {
     let output = Command::new(cmd)

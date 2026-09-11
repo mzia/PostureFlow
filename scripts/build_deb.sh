@@ -45,7 +45,9 @@ mkdir -p "$STAGE_DIR/usr/lib/systemd/user"
 mkdir -p "$STAGE_DIR/usr/share/applications"
 mkdir -p "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps"
 mkdir -p "$STAGE_DIR/usr/share/icons/hicolor/scalable/status"
+mkdir -p "$STAGE_DIR/usr/share/pixmaps"
 mkdir -p "$STAGE_DIR/usr/share/polkit-1/actions"
+
 mkdir -p "$STAGE_DIR/usr/share/dbus-1/system.d"
 mkdir -p "$STAGE_DIR/usr/share/man/man1"
 mkdir -p "$STAGE_DIR/usr/share/bash-completion/completions"
@@ -85,7 +87,15 @@ install -m 644 "$REPO_ROOT/data/icons/postureflow-dev-symbolic.svg" "$STAGE_DIR/
 install -m 644 "$REPO_ROOT/data/icons/postureflow-travel-symbolic.svg" "$STAGE_DIR/usr/share/icons/hicolor/scalable/status/postureflow-travel-symbolic.svg"
 install -m 644 "$REPO_ROOT/data/icons/postureflow-symbolic.svg" "$STAGE_DIR/usr/share/icons/hicolor/scalable/status/postureflow-symbolic.svg"
 
+# Install pixmaps fallbacks
+install -m 644 "$REPO_ROOT/data/icons/postureflow-home-symbolic.svg" "$STAGE_DIR/usr/share/pixmaps/postureflow-home-symbolic.svg"
+install -m 644 "$REPO_ROOT/data/icons/postureflow-work-symbolic.svg" "$STAGE_DIR/usr/share/pixmaps/postureflow-work-symbolic.svg"
+install -m 644 "$REPO_ROOT/data/icons/postureflow-dev-symbolic.svg" "$STAGE_DIR/usr/share/pixmaps/postureflow-dev-symbolic.svg"
+install -m 644 "$REPO_ROOT/data/icons/postureflow-travel-symbolic.svg" "$STAGE_DIR/usr/share/pixmaps/postureflow-travel-symbolic.svg"
+install -m 644 "$REPO_ROOT/data/icons/postureflow-symbolic.svg" "$STAGE_DIR/usr/share/pixmaps/postureflow-symbolic.svg"
+
 install -m 644 "$REPO_ROOT/data/io.github.mzia.PostureFlow.policy" "$STAGE_DIR/usr/share/polkit-1/actions/io.github.mzia.PostureFlow.policy"
+
 install -m 644 "$REPO_ROOT/data/io.github.mzia.PostureFlow.conf" "$STAGE_DIR/usr/share/dbus-1/system.d/io.github.mzia.PostureFlow.conf"
 
 # 5. Copy Man Page (gzipped)

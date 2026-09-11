@@ -130,10 +130,46 @@ async fn main() -> Result<(), Box<dyn Error>> {
         eprintln!("[!] Warning: Could not subscribe to ProfileChanged signal: {}", e);
     }
 
+    // Spawn background poller for state file changes (catches CLI, bash, scripts)
+    let state_file_watcher = state.clone();
+    let session_conn_watcher = session_conn.clone();
+    let daemon_watcher = daemon.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_millis(1500));
+        let mut last_profile = {
+            state_file_watcher.read().await.active_profile
+        };
+
+        loop {
+            interval.tick().await;
+
+            let current_id = postureflow::system::get_active_profile();
+            if let Ok(profile) = current_id.parse::<Profile>() {
+                if profile != last_profile {
+                    last_profile = profile;
+                    let changed = {
+                        let mut st = state_file_watcher.write().await;
+                        st.set_profile(profile)
+                    };
+                    if changed {
+                        println!("[*] State check: Active profile shifted to [{}]", profile.as_str().to_uppercase());
+                        emit_profile_updated(&session_conn_watcher, &state_file_watcher).await;
+                        daemon_watcher.send_notification(
+                            "PostureFlow",
+                            &format!("Active posture is [{}]", profile.as_str().to_uppercase()),
+                            profile.icon_name(),
+                        ).await;
+                    }
+                }
+            }
+        }
+    });
+
     println!("[+] Applet successfully loaded into COSMIC Panel. Listening for interactions...");
 
     // Main event loop
     loop {
+
         tokio::select! {
             // Signal from system daemon: external profile change (e.g. from CLI or script)
             Some(new_profile) = signal_rx.recv() => {
@@ -360,9 +396,12 @@ async fn emit_profile_updated(conn: &Connection, state: &Arc<RwLock<AppState>>) 
         let _ = StatusNotifierItem::new_icon(&sni_ctxt).await;
         let _ = StatusNotifierItem::new_tool_tip(&sni_ctxt).await;
         let _ = StatusNotifierItem::new_title(&sni_ctxt).await;
+        let _ = StatusNotifierItem::new_status(&sni_ctxt, "Active").await;
     }
+
 
     if let Ok(menu_ctxt) = zbus::SignalContext::new(conn, MENU_OBJECT_PATH) {
         let _ = DbusMenu::layout_updated(&menu_ctxt, rev, 0).await;
     }
 }
+

@@ -268,6 +268,12 @@ impl GuiApp {
 
 impl eframe::App for GuiApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // Auto-sync active profile with live system state
+        let current_sys_profile = system::get_active_profile();
+        if current_sys_profile != self.active_profile_id {
+            self.active_profile_id = current_sys_profile;
+        }
+
         // Notification Banner
         let mut dismiss = false;
         if let Some((ref msg, is_err)) = self.status_message {
@@ -293,14 +299,15 @@ impl eframe::App for GuiApp {
             self.status_message = None;
         }
 
-        // Top Navigation Header (COSMIC Style)
+        // Top Navigation Header (COSMIC Style, fully responsive for any window size)
         egui::Panel::top("nav_header")
             .frame(
                 egui::Frame::new()
                     .fill(Color32::from_rgb(22, 24, 32))
-                    .inner_margin(12),
+                    .inner_margin(egui::Margin::symmetric(14, 10)),
             )
             .show(ui, |ui| {
+                // Tier 1: App Title on left, Active Badge + Refresh on right
                 ui.horizontal(|ui| {
                     ui.heading(
                         RichText::new("PostureFlow")
@@ -309,34 +316,49 @@ impl eframe::App for GuiApp {
                     );
                     ui.label(RichText::new("v1.0.0").color(Color32::from_rgb(140, 150, 175)).small());
 
-                    ui.add_space(24.0);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("🔄 Refresh").clicked() {
+                            self.refresh_all();
+                        }
 
-                    // Nav Tabs
+                        let (badge_text, badge_color) = match self.active_profile_id.as_str() {
+                            "home" => ("ACTIVE: [HOME]", Color32::from_rgb(16, 185, 129)),
+                            "work" => ("ACTIVE: [WORK]", Color32::from_rgb(59, 130, 246)),
+                            "dev" => ("ACTIVE: [DEV]", Color32::from_rgb(245, 158, 11)),
+                            "travel" | "secure" => ("ACTIVE: [TRAVEL]", Color32::from_rgb(239, 68, 68)),
+                            _ => ("ACTIVE: [DEFAULT]", Color32::from_rgb(246, 166, 35)),
+                        };
+
+                        egui::Frame::new()
+                            .fill(badge_color.linear_multiply(0.18))
+                            .stroke(Stroke::new(1.0, badge_color))
+                            .corner_radius(CornerRadius::same(6))
+                            .inner_margin(egui::Margin::symmetric(8, 3))
+                            .show(ui, |ui| {
+                                ui.label(
+                                    RichText::new(badge_text)
+                                        .color(badge_color)
+                                        .strong()
+                                        .size(11.0),
+                                );
+                            });
+                    });
+                });
+
+                ui.add_space(8.0);
+
+                // Tier 2: Navigation Tabs with responsive wrapping (never overlaps with title or badge!)
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
                     ui.selectable_value(&mut self.main_tab, MainTab::Cockpit, "🛡️ Security Cockpit");
                     ui.selectable_value(&mut self.main_tab, MainTab::Ports, "🔌 Port Inspector");
                     ui.selectable_value(&mut self.main_tab, MainTab::AutoFlow, "⚡ Auto-Flow (Network)");
                     ui.selectable_value(&mut self.main_tab, MainTab::Triggers, "🎮 App Triggers");
                     ui.selectable_value(&mut self.main_tab, MainTab::Schedule, "🕒 Schedule & Battery");
                     ui.selectable_value(&mut self.main_tab, MainTab::Profiles, "🏷️ Profiles Manager");
-
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let active_badge = if self.active_profile_id == "default" {
-                            "ACTIVE: FACTORY DEFAULT".to_string()
-                        } else {
-                            format!("ACTIVE: [{}]", self.active_profile_id.to_uppercase())
-                        };
-                        ui.label(
-                            RichText::new(active_badge)
-                                .color(Color32::from_rgb(246, 166, 35))
-                                .strong(),
-                        );
-
-                        if ui.button("🔄 Refresh").clicked() {
-                            self.refresh_all();
-                        }
-                    });
                 });
             });
+
 
         // Reset to Factory Defaults Modal
         if self.show_reset_confirm {
@@ -1721,8 +1743,9 @@ fn main() -> Result<(), eframe::Error> {
             .with_title("PostureFlow - Security Cockpit & Profile Orchestrator")
             .with_app_id("io.github.mzia.PostureFlow")
             .with_inner_size([980.0, 680.0])
-            .with_min_inner_size([800.0, 520.0])
+            .with_min_inner_size([640.0, 420.0])
             .with_resizable(true),
+
         ..Default::default()
     };
 

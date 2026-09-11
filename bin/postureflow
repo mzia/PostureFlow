@@ -34,7 +34,12 @@ DEV_PORTS=(3000 5000 5173 8000 8080 8888 9000)
 save_state() {
     local p="$1"
     echo "$p" > "$STATE_FILE"
+    # Notify D-Bus system daemon if active
+    if command -v busctl >/dev/null 2>&1; then
+        busctl call io.github.mzia.PostureFlow /io/github/mzia/PostureFlow io.github.mzia.PostureFlow SetProfile s "$p" 2>/dev/null || true
+    fi
 }
+
 
 get_current_profile() {
     if [ -f "$STATE_FILE" ]; then

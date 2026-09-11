@@ -50,7 +50,7 @@ impl DbusMenu {
                 Some(props)
             }
             1 => {
-                props.insert("label".to_string(), Value::from("PostureFlow"));
+                props.insert("label".to_string(), Value::from("🛡️ PostureFlow"));
                 props.insert("enabled".to_string(), Value::from(false));
                 Some(props)
             }
@@ -58,11 +58,12 @@ impl DbusMenu {
                 let score = crate::inspector::PostureScoreReport::compute();
                 props.insert(
                     "label".to_string(),
-                    Value::from(format!("Active: {}  |  🛡️ Posture Score: {}% [{}]", active.display_name(), score.total_score, score.letter_grade)),
+                    Value::from(format!("Active: [{}]  •  Score: {}% [{}]", active.as_str().to_uppercase(), score.total_score, score.letter_grade)),
                 );
                 props.insert("enabled".to_string(), Value::from(false));
                 Some(props)
             }
+
             3 | 20 | 30 => {
                 props.insert("type".to_string(), Value::from("separator"));
                 Some(props)
