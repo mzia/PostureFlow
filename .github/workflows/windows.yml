@@ -53,3 +53,22 @@ jobs:
 
       - name: Build Release Binaries
         run: cargo build --release --bin postureflow-gui --bin postureflow-daemon
+
+      - name: Create Windows Install Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist/windows-x64 -Force | Out-Null
+          Copy-Item target/release/postureflow-gui.exe dist/windows-x64/
+          Copy-Item target/release/postureflow-daemon.exe dist/windows-x64/
+          Copy-Item windows/install.ps1 dist/windows-x64/
+          Copy-Item windows/uninstall.ps1 dist/windows-x64/
+          Copy-Item windows/resources/PostureFlow.manifest dist/windows-x64/
+          Copy-Item windows/README.md dist/windows-x64/
+          Compress-Archive -Path dist/windows-x64/* -DestinationPath dist/postureflow_1.0.0_windows_x64.zip -Force
+
+      - name: Upload Windows Distribution Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: postureflow-windows-x64
+          path: dist/postureflow_1.0.0_windows_x64.zip
+

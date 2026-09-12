@@ -65,7 +65,7 @@ public struct PostureConfig: Codable, Sendable {
         let url = defaultConfigURL
         guard FileManager.default.fileExists(atPath: url.path),
               let data = try? Data(contentsOf: url),
-              let config = try? JSONDecoder().decode(PostureConfig.self, data: data) else {
+              let config = try? JSONDecoder().decode(PostureConfig.self, from: data) else {
             return PostureConfig()
         }
         return config

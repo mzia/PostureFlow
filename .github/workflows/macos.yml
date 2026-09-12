@@ -34,3 +34,25 @@ jobs:
       - name: Run Swift Unit Tests
         working-directory: macos
         run: swift test -v
+
+      - name: Build macOS Release Binaries
+        working-directory: macos
+        run: swift build -c release -v
+
+      - name: Create macOS Install Package
+        run: |
+          mkdir -p dist/macos
+          cp macos/.build/release/postureflow dist/macos/ 2>/dev/null || true
+          cp macos/.build/release/PostureFlowMenuBar dist/macos/ 2>/dev/null || true
+          cp macos/.build/release/PostureFlowHelper dist/macos/ 2>/dev/null || true
+          cp macos/install.sh dist/macos/
+          cp macos/uninstall.sh dist/macos/
+          cp macos/README.md dist/macos/
+          tar -czvf dist/postureflow_1.0.0_macos_universal.tar.gz -C dist macos
+
+      - name: Upload macOS Distribution Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: postureflow-macos
+          path: dist/postureflow_1.0.0_macos_universal.tar.gz
+

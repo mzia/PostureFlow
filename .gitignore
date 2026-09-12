@@ -10,7 +10,12 @@
 
 # Build artifacts
 target/
-dist/
+dist/windows-x64/
+dist/macos/
+!dist/postureflow_1.0.0_amd64.deb
+!dist/postureflow_1.0.0_windows_x64.zip
+!dist/postureflow_1.0.0_macos_universal.tar.gz
+!dist/README.md
 
 # Logs & temp files
 *.log
