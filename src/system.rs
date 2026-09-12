@@ -2,27 +2,65 @@ use std::fs;
 use std::process::Command;
 use crate::profile::Profile;
 
+#[cfg(unix)]
 pub const STATE_FILE: &str = "/etc/postureflow-state";
+#[cfg(windows)]
+pub const STATE_FILE: &str = r"C:\ProgramData\PostureFlow\state";
+
 pub const SYSCTL_CONF: &str = "/etc/sysctl.d/99-postureflow.conf";
 pub const LIMITS_CONF: &str = "/etc/security/limits.d/99-postureflow.conf";
 
+#[cfg(unix)]
 pub fn is_privileged() -> bool {
     unsafe { libc::geteuid() == 0 }
+}
+
+#[cfg(windows)]
+pub fn is_privileged() -> bool {
+    // In Windows, elevated administrator/SYSTEM processes succeed on `net session`
+    std::process::Command::new("net")
+        .arg("session")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
 pub fn state_file_path() -> String {
     if let Ok(path) = std::env::var("POSTUREFLOW_STATE_FILE") {
         return path;
     }
-    if is_privileged() {
-        STATE_FILE.to_string()
-    } else {
-        if let Ok(dir) = std::env::var("XDG_RUNTIME_DIR") {
-            if std::path::Path::new(&dir).is_dir() {
-                return format!("{}/postureflow-state", dir);
+    #[cfg(windows)]
+    {
+        if is_privileged() {
+            if let Ok(pd) = std::env::var("ProgramData") {
+                let dir = format!(r"{}\PostureFlow", pd);
+                let _ = fs::create_dir_all(&dir);
+                return format!(r"{}\state", dir);
             }
+            STATE_FILE.to_string()
+        } else {
+            if let Ok(la) = std::env::var("LOCALAPPDATA") {
+                let dir = format!(r"{}\PostureFlow", la);
+                let _ = fs::create_dir_all(&dir);
+                return format!(r"{}\state", dir);
+            }
+            r"C:\Temp\postureflow-state".to_string()
         }
-        "/tmp/postureflow-state".to_string()
+    }
+    #[cfg(unix)]
+    {
+        if is_privileged() {
+            STATE_FILE.to_string()
+        } else {
+            if let Ok(dir) = std::env::var("XDG_RUNTIME_DIR") {
+                if std::path::Path::new(&dir).is_dir() {
+                    return format!("{}/postureflow-state", dir);
+                }
+            }
+            "/tmp/postureflow-state".to_string()
+        }
     }
 }
 
@@ -159,7 +197,20 @@ pub fn apply_profile_config(config: &crate::config::ProfileConfig) -> Result<(),
         return Ok(());
     }
 
-    // 1. Sysctls
+    #[cfg(windows)]
+    {
+        crate::platform::windows::firewall::apply_windows_firewall(config)?;
+        let _ = crate::platform::windows::power::apply_windows_power_profile(&config.profile.id);
+        if let Some(idle) = config.desktop.idle_delay_seconds {
+            crate::platform::windows::power::set_windows_idle_timeout(idle);
+        }
+        save_active_profile_str(&config.profile.id)?;
+        return Ok(());
+    }
+
+    #[cfg(unix)]
+    {
+        // 1. Sysctls
     if !config.kernel.is_empty() {
         let mut sysctl_content = String::new();
         for (k, v) in &config.kernel {
@@ -246,6 +297,7 @@ pub fn apply_profile_config(config: &crate::config::ProfileConfig) -> Result<(),
 
     save_active_profile_str(&config.profile.id)?;
     Ok(())
+    }
 }
 
 pub fn apply_cpu_epp(preference: &str) -> Result<(), String> {
@@ -322,79 +374,128 @@ pub fn reset_to_defaults() -> Result<(), String> {
     let path = state_file_path();
     let _ = fs::remove_file(&path);
 
-    // Restore desktop idle lock timeout to Pop!_OS default (15 minutes = 900 seconds)
-    set_desktop_idle_delay(900);
-
-    if !is_privileged() {
+    #[cfg(windows)]
+    {
+        crate::platform::windows::power::set_windows_idle_timeout(900);
+        if !is_privileged() {
+            return Ok(());
+        }
+        crate::platform::windows::firewall::clean_postureflow_firewall_rules();
+        let _ = crate::platform::windows::power::apply_windows_power_profile("home");
+        let _ = fs::remove_file(STATE_FILE);
         return Ok(());
     }
 
-    let _ = execute("ufw", &["--force", "disable"]);
-    let _ = execute("ufw", &["--force", "reset"]);
+    #[cfg(unix)]
+    {
+        // Restore desktop idle lock timeout to Pop!_OS default (15 minutes = 900 seconds)
+        set_desktop_idle_delay(900);
 
-    let _ = fs::remove_file(STATE_FILE);
-    let _ = fs::remove_file(SYSCTL_CONF);
-    let _ = fs::remove_file(LIMITS_CONF);
-    let _ = fs::remove_file("/etc/popos-security-profile");
-    let _ = fs::remove_file("/etc/sysctl.d/99-popos-security.conf");
-    let _ = fs::remove_file("/etc/security/limits.d/99-popos-security.conf");
+        if !is_privileged() {
+            return Ok(());
+        }
 
-    let _ = execute("sysctl", &["--system"]);
+        let _ = execute("ufw", &["--force", "disable"]);
+        let _ = execute("ufw", &["--force", "reset"]);
 
-    // Restore platform power profile to Pop!_OS factory default ('balanced')
-    let _ = execute("system76-power", &["profile", "balanced"])
-        .or_else(|_| execute("powerprofilesctl", &["set", "balanced"]));
+        let _ = fs::remove_file(STATE_FILE);
+        let _ = fs::remove_file(SYSCTL_CONF);
+        let _ = fs::remove_file(LIMITS_CONF);
+        let _ = fs::remove_file("/etc/popos-security-profile");
+        let _ = fs::remove_file("/etc/sysctl.d/99-popos-security.conf");
+        let _ = fs::remove_file("/etc/security/limits.d/99-popos-security.conf");
 
-    // Restore battery charge threshold to 100% (unrestricted charging)
-    let _ = execute("system76-power", &["charge-thresholds", "--max", "100"])
-        .or_else(|_| {
-            fs::write("/sys/class/power_supply/BAT0/charge_control_limit_max", "100")
-                .map(|_| String::new())
-                .map_err(|e| e.to_string())
-        });
+        let _ = execute("sysctl", &["--system"]);
 
-    // Restore CPU EPP to factory balanced performance
-    let _ = apply_cpu_epp("balance_performance");
+        // Restore platform power profile to Pop!_OS factory default ('balanced')
+        let _ = execute("system76-power", &["profile", "balanced"])
+            .or_else(|_| execute("powerprofilesctl", &["set", "balanced"]));
 
-    // Restore USB authorization to standard auto-authorize
-    let _ = apply_usb_lockdown(false);
+        // Restore battery charge threshold to 100% (unrestricted charging)
+        let _ = execute("system76-power", &["charge-thresholds", "--max", "100"])
+            .or_else(|_| {
+                fs::write("/sys/class/power_supply/BAT0/charge_control_limit_max", "100")
+                    .map(|_| String::new())
+                    .map_err(|e| e.to_string())
+            });
 
-    // Restore Bluetooth radio to unblocked
-    let _ = apply_bluetooth(true);
+        // Restore CPU EPP to factory balanced performance
+        let _ = apply_cpu_epp("balance_performance");
 
-    Ok(())
+        // Restore USB authorization to standard auto-authorize
+        let _ = apply_usb_lockdown(false);
+
+        // Restore Bluetooth radio to unblocked
+        let _ = apply_bluetooth(true);
+
+        Ok(())
+    }
 }
 
 pub fn get_status_report() -> String {
     let profile = get_active_profile();
-    let ptrace = execute("sysctl", &["-n", "kernel.yama.ptrace_scope"]).unwrap_or_else(|_| "N/A".into());
-    let inotify = execute("sysctl", &["-n", "fs.inotify.max_user_watches"]).unwrap_or_else(|_| "N/A".into());
-    let map_count = execute("sysctl", &["-n", "vm.max_map_count"]).unwrap_or_else(|_| "N/A".into());
-    let ufw_status = execute("ufw", &["status"]).unwrap_or_else(|_| "inactive".into());
-    let cpu_epp = get_cpu_epp().unwrap_or_else(|| "N/A".into());
-    let usb_lockdown = if is_usb_locked_down() { "ENGAGED (BadUSB Blocked)" } else { "Standard (Auto-authorized)" };
-    let bt_status = if is_bluetooth_blocked() { "Blocked / Radio Off" } else { "Active / Unblocked" };
 
-    format!(
-        "Active Profile: {}\nCPU EPP Mode:   {}\nUSB Security:   {}\nBluetooth:      {}\nptrace_scope:   {}\ninotify watches:{}\nvm.max_map_count: {}\nUFW Status:\n{}",
-        profile.to_uppercase(),
-        cpu_epp,
-        usb_lockdown,
-        bt_status,
-        ptrace,
-        inotify,
-        map_count,
-        ufw_status
-    )
+    #[cfg(windows)]
+    {
+        format!(
+            "Active Profile: {}\nPlatform:       Windows 11\nFirewall:       Windows Defender Firewall\nPower Scheme:   Active via powercfg",
+            profile.to_uppercase()
+        )
+    }
+
+    #[cfg(unix)]
+    {
+        let ptrace = execute("sysctl", &["-n", "kernel.yama.ptrace_scope"]).unwrap_or_else(|_| "N/A".into());
+        let inotify = execute("sysctl", &["-n", "fs.inotify.max_user_watches"]).unwrap_or_else(|_| "N/A".into());
+        let map_count = execute("sysctl", &["-n", "vm.max_map_count"]).unwrap_or_else(|_| "N/A".into());
+        let ufw_status = execute("ufw", &["status"]).unwrap_or_else(|_| "inactive".into());
+        let cpu_epp = get_cpu_epp().unwrap_or_else(|| "N/A".into());
+        let usb_lockdown = if is_usb_locked_down() { "ENGAGED (BadUSB Blocked)" } else { "Standard (Auto-authorized)" };
+        let bt_status = if is_bluetooth_blocked() { "Blocked / Radio Off" } else { "Active / Unblocked" };
+
+        format!(
+            "Active Profile: {}\nCPU EPP Mode:   {}\nUSB Security:   {}\nBluetooth:      {}\nptrace_scope:   {}\ninotify watches:{}\nvm.max_map_count: {}\nUFW Status:\n{}",
+            profile.to_uppercase(),
+            cpu_epp,
+            usb_lockdown,
+            bt_status,
+            ptrace,
+            inotify,
+            map_count,
+            ufw_status
+        )
+    }
 }
 
 pub fn block_port(port: u16, proto: &str) -> Result<(), String> {
     if !is_privileged() {
-        return Err("Root privileges required to block ports in UFW".to_string());
+        return Err("Root/Administrator privileges required to block ports".to_string());
     }
-    let rule = format!("{}/{}", port, proto);
-    execute("ufw", &["deny", &rule, "comment", "Blocked via PostureFlow Port Inspector"])?;
-    let _ = execute("ufw", &["reload"]);
-    Ok(())
+
+    #[cfg(windows)]
+    {
+        let rule_name = format!("PostureFlow-Block-{}", port);
+        let _ = Command::new("netsh")
+            .args([
+                "advfirewall", "firewall", "add", "rule",
+                &format!("name={}", rule_name),
+                "dir=in", "action=block",
+                &format!("protocol={}", proto.to_uppercase()),
+                &format!("localport={}", port),
+                "enable=yes",
+                "description=Blocked via PostureFlow Port Inspector",
+            ])
+            .output();
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    {
+        let rule = format!("{}/{}", port, proto);
+        execute("ufw", &["deny", &rule, "comment", "Blocked via PostureFlow Port Inspector"])?;
+        let _ = execute("ufw", &["reload"]);
+        Ok(())
+    }
 }
+
 

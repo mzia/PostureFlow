@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="PostureFlow" Language="1033" Version="1.0.0.0" Manufacturer="M. Zia" UpgradeCode="7E9E8D7A-6B5C-4F3E-2D1C-0B9A8F7E6D5C">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="ProductFeature" Title="PostureFlow" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+    </Feature>
+  </Product>
+
+  <Fragment>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="PostureFlow" />
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="PostureFlow" />
+      </Directory>
+    </Directory>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Component Id="PostureFlowGui" Guid="A1B2C3D4-E5F6-7890-1234-56789ABCDEF0">
+        <File Id="PostureFlowGuiExe" Source="target\release\postureflow-gui.exe" KeyPath="yes">
+          <Shortcut Id="ApplicationStartMenuShortcut" Directory="ApplicationProgramsFolder" Name="PostureFlow Cockpit" WorkingDirectory="INSTALLFOLDER" Advertise="yes" />
+        </File>
+      </Component>
+      <Component Id="PostureFlowDaemon" Guid="B2C3D4E5-F6A7-8901-2345-6789ABCDEF01">
+        <File Id="PostureFlowDaemonExe" Source="target\release\postureflow-daemon.exe" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

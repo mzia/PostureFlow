@@ -1,0 +1,55 @@
+name: Windows 11 CI & Build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'windows/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/windows.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'windows/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/windows.yml'
+
+jobs:
+  build-windows:
+    name: Build & Verify on Windows 11
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check All Windows Targets
+        run: cargo check --target x86_64-pc-windows-msvc --all-targets
+
+      - name: Run Tests
+        run: cargo test
+
+      - name: Build Release Binaries
+        run: cargo build --release --bin postureflow-gui --bin postureflow-daemon

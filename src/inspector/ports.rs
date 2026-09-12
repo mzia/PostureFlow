@@ -38,33 +38,80 @@ impl ListeningPort {
 
 /// Scan all currently listening sockets and return structured information
 pub fn scan_listening_ports() -> Vec<ListeningPort> {
-    // Attempt fast and comprehensive inspection via `ss -tulpn -H`
-    let output = Command::new("ss")
-        .args(["-tulpn", "-H"])
-        .output();
+    #[cfg(windows)]
+    {
+        return scan_listening_ports_windows();
+    }
 
-    let mut results = Vec::new();
+    #[cfg(unix)]
+    {
+        // Attempt fast and comprehensive inspection via `ss -tulpn -H`
+        let output = Command::new("ss")
+            .args(["-tulpn", "-H"])
+            .output();
 
-    if let Ok(out) = output {
-        if out.status.success() {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            results = parse_ss_output(&stdout);
+        let mut results = Vec::new();
+
+        if let Ok(out) = output {
+            if out.status.success() {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                results = parse_ss_output(&stdout);
+            }
+        }
+
+        if results.is_empty() {
+            // Fallback: parse /proc/net/tcp and /proc/net/udp
+            results = scan_proc_net();
+        }
+
+        // Sort: public/exposed ports first, then by port number
+        results.sort_by(|a, b| {
+            b.is_public
+                .cmp(&a.is_public)
+                .then_with(|| a.port.cmp(&b.port))
+        });
+
+        results
+    }
+}
+
+#[cfg(windows)]
+pub fn scan_listening_ports_windows() -> Vec<ListeningPort> {
+    let mut ports = Vec::new();
+    if let Ok(output) = Command::new("netstat").args(["-ano", "-p", "tcp"]).output() {
+        if output.status.success() {
+            let out_str = String::from_utf8_lossy(&output.stdout);
+            for line in out_str.lines() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 5 && parts[0].eq_ignore_ascii_case("TCP") && parts[3].eq_ignore_ascii_case("LISTENING") {
+                    if let Some((ip, port_str)) = parts[1].rsplit_once(':') {
+                        if let Ok(port) = port_str.parse::<u16>() {
+                            let pid = parts[4].parse::<u32>().ok();
+                            let is_local = is_loopback(ip);
+                            let is_pub = !is_local;
+                            let service_hint = ListeningPort::get_service_hint(port, "tcp");
+                            ports.push(ListeningPort {
+                                protocol: "tcp".to_string(),
+                                local_ip: ip.to_string(),
+                                port,
+                                process_name: pid.map(|p| format!("PID {}", p)).unwrap_or_else(|| "Unknown".to_string()),
+                                pid,
+                                is_local_only: is_local,
+                                is_public: is_pub,
+                                service_hint,
+                            });
+                        }
+                    }
+                }
+            }
         }
     }
-
-    if results.is_empty() {
-        // Fallback: parse /proc/net/tcp and /proc/net/udp
-        results = scan_proc_net();
-    }
-
-    // Sort: public/exposed ports first, then by port number
-    results.sort_by(|a, b| {
+    ports.sort_by(|a, b| {
         b.is_public
             .cmp(&a.is_public)
             .then_with(|| a.port.cmp(&b.port))
     });
-
-    results
+    ports
 }
 
 pub fn parse_ss_output(text: &str) -> Vec<ListeningPort> {
@@ -185,6 +232,7 @@ fn parse_process_info(users_str: &str) -> (String, Option<u32>) {
     ("system/unprivileged".to_string(), None)
 }
 
+#[cfg(unix)]
 fn scan_proc_net() -> Vec<ListeningPort> {
     let mut ports = Vec::new();
     for (proto, path) in [("tcp", "/proc/net/tcp"), ("udp", "/proc/net/udp")] {
@@ -218,6 +266,7 @@ fn scan_proc_net() -> Vec<ListeningPort> {
     ports
 }
 
+#[cfg(unix)]
 fn parse_proc_hex_addr(hex_str: &str) -> Option<(String, u16)> {
     let parts: Vec<&str> = hex_str.split(':').collect();
     if parts.len() != 2 {

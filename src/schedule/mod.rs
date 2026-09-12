@@ -224,7 +224,10 @@ pub fn get_current_local_time() -> LocalTime {
     unsafe {
         let t = libc::time(std::ptr::null_mut());
         let mut tm: libc::tm = std::mem::zeroed();
+        #[cfg(unix)]
         libc::localtime_r(&t, &mut tm);
+        #[cfg(windows)]
+        libc::localtime_s(&mut tm, &t);
         LocalTime {
             hour: tm.tm_hour as u32,
             minute: tm.tm_min as u32,

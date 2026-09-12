@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+#[cfg(unix)]
 use std::process::Command;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,12 +147,19 @@ pub fn save_autoflow_config(config: &AutoFlowConfig) -> Result<PathBuf, String> 
 
 /// Detect the active network environment using nmcli
 pub fn detect_active_networks() -> ActiveNetworkInfo {
-    let mut current_ssid = None;
-    let mut active_vpn = None;
-    let mut active_devices = Vec::new();
-    let mut primary_type = "none".to_string();
+    #[cfg(windows)]
+    {
+        return crate::platform::windows::network::detect_active_networks_windows();
+    }
 
-    let output = Command::new("nmcli")
+    #[cfg(unix)]
+    {
+        let mut current_ssid = None;
+        let mut active_vpn = None;
+        let mut active_devices = Vec::new();
+        let mut primary_type = "none".to_string();
+
+        let output = Command::new("nmcli")
         .args(["-t", "-f", "TYPE,NAME,DEVICE", "con", "show", "--active"])
         .output();
 
@@ -190,11 +198,12 @@ pub fn detect_active_networks() -> ActiveNetworkInfo {
         }
     }
 
-    ActiveNetworkInfo {
-        primary_type,
-        current_ssid,
-        active_vpn,
-        active_devices,
+        ActiveNetworkInfo {
+            primary_type,
+            current_ssid,
+            active_vpn,
+            active_devices,
+        }
     }
 }
 

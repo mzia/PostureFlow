@@ -150,6 +150,7 @@ pub fn save_triggers_config(config: &TriggersConfig) -> Result<PathBuf, String> 
     Ok(target)
 }
 
+#[cfg(unix)]
 use std::io::Read;
 
 /// Scans procfs `/proc/<pid>/comm` in memory with sub-millisecond overhead.
@@ -162,27 +163,57 @@ pub fn scan_running_processes() -> HashSet<String> {
 /// If `watched` is provided, heap allocations (`String`) are only performed
 /// for process names that actually match the watched list, dropping heap churn to zero.
 pub fn scan_running_processes_filtered(watched: Option<&HashSet<String>>) -> HashSet<String> {
-    let mut procs = HashSet::new();
-    let mut buf = [0u8; 32];
-    if let Ok(entries) = fs::read_dir("/proc") {
-        for entry in entries.flatten() {
-            let name = entry.file_name();
-            let bytes = name.as_encoded_bytes();
-            if !bytes.is_empty() && bytes.iter().all(|b| b.is_ascii_digit()) {
-                let comm_path = entry.path().join("comm");
-                if let Ok(mut file) = fs::File::open(&comm_path) {
-                    if let Ok(n) = file.read(&mut buf) {
-                        if n > 0 {
-                            if let Ok(comm_str) = std::str::from_utf8(&buf[..n]) {
-                                let trimmed = comm_str.trim();
-                                if !trimmed.is_empty() {
-                                    let clean = trimmed.to_ascii_lowercase();
-                                    if let Some(w) = watched {
-                                        if w.contains(&clean) {
+    #[cfg(windows)]
+    {
+        let mut procs = HashSet::new();
+        if let Ok(output) = Command::new("tasklist").args(["/fo", "csv", "/nh"]).output() {
+            if output.status.success() {
+                let out_str = String::from_utf8_lossy(&output.stdout);
+                for line in out_str.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with('"') {
+                        if let Some(end_quote) = trimmed[1..].find('"') {
+                            let proc_name = &trimmed[1..=end_quote];
+                            let clean = proc_name.trim_end_matches(".exe").to_ascii_lowercase();
+                            if let Some(w) = watched {
+                                if w.contains(&clean) || w.contains(proc_name) {
+                                    procs.insert(clean);
+                                }
+                            } else {
+                                procs.insert(clean);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return procs;
+    }
+
+    #[cfg(unix)]
+    {
+        let mut procs = HashSet::new();
+        let mut buf = [0u8; 32];
+        if let Ok(entries) = fs::read_dir("/proc") {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let bytes = name.as_encoded_bytes();
+                if !bytes.is_empty() && bytes.iter().all(|b| b.is_ascii_digit()) {
+                    let comm_path = entry.path().join("comm");
+                    if let Ok(mut file) = fs::File::open(&comm_path) {
+                        if let Ok(n) = file.read(&mut buf) {
+                            if n > 0 {
+                                if let Ok(comm_str) = std::str::from_utf8(&buf[..n]) {
+                                    let trimmed = comm_str.trim();
+                                    if !trimmed.is_empty() {
+                                        let clean = trimmed.to_ascii_lowercase();
+                                        if let Some(w) = watched {
+                                            if w.contains(&clean) {
+                                                procs.insert(clean);
+                                            }
+                                        } else {
                                             procs.insert(clean);
                                         }
-                                    } else {
-                                        procs.insert(clean);
                                     }
                                 }
                             }
@@ -191,8 +222,8 @@ pub fn scan_running_processes_filtered(watched: Option<&HashSet<String>>) -> Has
                 }
             }
         }
+        procs
     }
-    procs
 }
 
 /// Evaluates triggers using zero-allocation process filtering
