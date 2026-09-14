@@ -54,15 +54,25 @@ cd C:\Temp\PostureFlow\windows-x64
 
 ## 🍏 macOS: macOS 15 Sequoia & macOS 14 Sonoma (Apple Silicon & Intel)
 
-* **Package:** `postureflow_1.0.0_macos_universal.tar.gz` (240 KB)
+* **Packages:**
+  * `PostureFlow_1.0.0.dmg` (Standard macOS Drag-and-Drop Disk Image)
+  * `postureflow_1.0.0_macos_universal.tar.gz` (Universal archive with automated scripts)
 * **Contents:**
+  * `PostureFlow.app` (Native SwiftUI MenuBarExtra App bundle)
   * `postureflow` (Terminal CLI binary)
-  * `PostureFlowApp` (Native SwiftUI MenuBarExtra App binary)
   * `PostureFlowHelper` (Root Privileged Helper Daemon binary)
   * `install.sh` (Automated Privileged Helper & launchd deployment script)
   * `uninstall.sh` (Daemon removal & packet filter anchor flush script)
 
-### Installation
+### Option A: Drag-and-Drop DMG Installation (Recommended)
+1. Double-click `PostureFlow_1.0.0.dmg` to mount the image.
+2. Drag **PostureFlow.app** into the **Applications** folder.
+3. Launch **PostureFlow** from Spotlight or `/Applications`.
+4. The PostureFlow shield icon appears in your menu bar.
+5. Click the shield icon -> **Settings (gear)** -> **Security & Power** tab.
+6. Click **Register Helper Tool**; macOS will prompt for your Touch ID or password to grant background daemon privileges (via `SMAppService`).
+
+### Option B: Automated Script Installation
 ```bash
 tar -xzvf dist/postureflow_1.0.0_macos_universal.tar.gz
 cd macos
@@ -70,7 +80,13 @@ sudo ./install.sh
 ```
 
 ### Uninstallation
-```bash
-cd macos
-sudo ./uninstall.sh
-```
+* **Via App / Finder:** Drag `/Applications/PostureFlow.app` to Trash and run:
+  ```bash
+  sudo launchctl bootout system/com.postureflow.helper 2>/dev/null || true
+  sudo rm -f /Library/LaunchDaemons/com.postureflow.helper.plist /Library/PrivilegedHelperTools/com.postureflow.helper
+  ```
+* **Via Script:**
+  ```bash
+  cd macos
+  sudo ./uninstall.sh
+  ```

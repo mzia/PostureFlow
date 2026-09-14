@@ -50,9 +50,27 @@ jobs:
           cp macos/README.md dist/macos/
           tar -czvf dist/postureflow_1.0.0_macos_universal.tar.gz -C dist macos
 
+      - name: Build macOS DMG Package
+        run: |
+          mkdir -p dist/dmg_staging/PostureFlow.app/Contents/{MacOS,Resources,Library/LaunchDaemons}
+          cp macos/.build/release/PostureFlowApp dist/dmg_staging/PostureFlow.app/Contents/MacOS/PostureFlowApp
+          cp macos/.build/release/postureflow dist/dmg_staging/PostureFlow.app/Contents/MacOS/postureflow
+          cp macos/.build/release/PostureFlowHelper dist/dmg_staging/PostureFlow.app/Contents/Resources/PostureFlowHelper
+          cp macos/Resources/Info.plist dist/dmg_staging/PostureFlow.app/Contents/Info.plist
+          cp macos/Resources/com.postureflow.helper.plist dist/dmg_staging/PostureFlow.app/Contents/Resources/com.postureflow.helper.plist
+          cp macos/Resources/com.postureflow.helper.plist dist/dmg_staging/PostureFlow.app/Contents/Library/LaunchDaemons/com.postureflow.helper.plist
+          ln -s /Applications dist/dmg_staging/Applications
+          hdiutil create -volname "PostureFlow" -srcfolder dist/dmg_staging -ov -format UDZO dist/PostureFlow_1.0.0.dmg
+
       - name: Upload macOS Distribution Package
         uses: actions/upload-artifact@v4
         with:
           name: postureflow-macos
           path: dist/postureflow_1.0.0_macos_universal.tar.gz
+
+      - name: Upload macOS DMG Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: postureflow-macos-dmg
+          path: dist/PostureFlow_1.0.0.dmg
 
