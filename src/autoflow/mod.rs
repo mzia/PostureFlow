@@ -12,6 +12,8 @@ pub struct AutoFlowConfig {
     #[serde(default)]
     pub vpn_profile: Option<String>,
     #[serde(default)]
+    pub vpn_rules: Vec<VpnRule>,
+    #[serde(default)]
     pub rules: Vec<NetworkRule>,
 }
 
@@ -29,6 +31,18 @@ impl Default for AutoFlowConfig {
             enabled: true,
             default_unknown_wifi: "travel".to_string(),
             vpn_profile: Some("work".to_string()),
+            vpn_rules: vec![
+                VpnRule {
+                    match_name: "tailscale".to_string(),
+                    profile: "dev".to_string(),
+                    comment: Some("Tailscale Mesh Tailnet".to_string()),
+                },
+                VpnRule {
+                    match_name: "wg".to_string(),
+                    profile: "work".to_string(),
+                    comment: Some("WireGuard Corporate Gateway".to_string()),
+                },
+            ],
             rules: vec![
                 NetworkRule {
                     ssid: Some("HomeNetwork".to_string()),
@@ -54,6 +68,14 @@ impl Default for AutoFlowConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VpnRule {
+    pub match_name: String,
+    pub profile: String,
+    #[serde(default)]
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NetworkRule {
     #[serde(default)]
     pub ssid: Option<String>,
@@ -69,6 +91,8 @@ pub struct ActiveNetworkInfo {
     pub primary_type: String,            // "wifi", "ethernet", "vpn", "none"
     pub current_ssid: Option<String>,
     pub active_vpn: Option<String>,
+    #[serde(default)]
+    pub vpn_tunnels: Vec<String>,
     pub active_devices: Vec<String>,
 }
 
@@ -156,52 +180,83 @@ pub fn detect_active_networks() -> ActiveNetworkInfo {
     {
         let mut current_ssid = None;
         let mut active_vpn = None;
+        let mut vpn_tunnels = Vec::new();
         let mut active_devices = Vec::new();
         let mut primary_type = "none".to_string();
 
         let output = Command::new("nmcli")
-        .args(["-t", "-f", "TYPE,NAME,DEVICE", "con", "show", "--active"])
-        .output();
+            .args(["-t", "-f", "TYPE,NAME,DEVICE", "con", "show", "--active"])
+            .output();
 
-    if let Ok(out) = output {
-        if out.status.success() {
-            let s = String::from_utf8_lossy(&out.stdout);
-            for line in s.lines() {
-                let parts: Vec<&str> = line.split(':').collect();
-                if parts.len() < 3 {
-                    continue;
-                }
-                let con_type = parts[0].to_lowercase();
-                let name = parts[1];
-                let dev = parts[2];
-
-                if con_type == "loopback" {
-                    continue;
-                }
-
-                active_devices.push(dev.to_string());
-
-                if con_type.contains("vpn") || con_type.contains("wireguard") || dev.starts_with("tun") || dev.starts_with("wg") {
-                    active_vpn = Some(name.to_string());
-                    if primary_type != "wifi" {
-                        primary_type = "vpn".to_string();
+        if let Ok(out) = output {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout);
+                for line in s.lines() {
+                    let parts: Vec<&str> = line.split(':').collect();
+                    if parts.len() < 3 {
+                        continue;
                     }
-                } else if con_type.contains("wireless") || con_type.contains("wifi") || con_type.contains("802-11") {
-                    current_ssid = Some(name.to_string());
-                    primary_type = "wifi".to_string();
-                } else if con_type.contains("ethernet") || dev.starts_with("en") || dev.starts_with("eth") {
-                    if primary_type == "none" {
-                        primary_type = "ethernet".to_string();
+                    let con_type = parts[0].to_lowercase();
+                    let name = parts[1];
+                    let dev = parts[2];
+
+                    if con_type == "loopback" {
+                        continue;
+                    }
+
+                    active_devices.push(dev.to_string());
+
+                    if con_type.contains("vpn") || con_type.contains("wireguard") || dev.starts_with("tun") || dev.starts_with("wg") || dev.starts_with("tailscale") {
+                        active_vpn = Some(name.to_string());
+                        vpn_tunnels.push(name.to_string());
+                        if !dev.is_empty() && dev != name {
+                            vpn_tunnels.push(dev.to_string());
+                        }
+                        if primary_type != "wifi" {
+                            primary_type = "vpn".to_string();
+                        }
+                    } else if con_type.contains("wireless") || con_type.contains("wifi") || con_type.contains("802-11") {
+                        current_ssid = Some(name.to_string());
+                        primary_type = "wifi".to_string();
+                    } else if con_type.contains("ethernet") || dev.starts_with("en") || dev.starts_with("eth") {
+                        if primary_type == "none" {
+                            primary_type = "ethernet".to_string();
+                        }
                     }
                 }
             }
         }
-    }
+
+        // Direct kernel network interface scan for Tailscale, WireGuard, ZeroTier, and Cloudflare WARP
+        if let Ok(entries) = std::fs::read_dir("/sys/class/net") {
+            for entry in entries.flatten() {
+                let iface_name = entry.file_name().to_string_lossy().to_string();
+                if iface_name.starts_with("tailscale") || iface_name.starts_with("wg") || iface_name.starts_with("zt") || iface_name.starts_with("warp") {
+                    let operstate = std::fs::read_to_string(entry.path().join("operstate")).unwrap_or_default();
+                    let state_str = operstate.trim();
+                    if state_str == "up" || state_str == "unknown" {
+                        if !active_devices.contains(&iface_name) {
+                            active_devices.push(iface_name.clone());
+                        }
+                        if !vpn_tunnels.contains(&iface_name) {
+                            vpn_tunnels.push(iface_name.clone());
+                        }
+                        if active_vpn.is_none() {
+                            active_vpn = Some(iface_name);
+                            if primary_type != "wifi" {
+                                primary_type = "vpn".to_string();
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         ActiveNetworkInfo {
             primary_type,
             current_ssid,
             active_vpn,
+            vpn_tunnels,
             active_devices,
         }
     }
@@ -213,8 +268,23 @@ pub fn evaluate_posture(config: &AutoFlowConfig, net: &ActiveNetworkInfo) -> Opt
         return None;
     }
 
-    // 1. VPN Rule Priority
-    if net.active_vpn.is_some() {
+    // 1. Specific VPN Rules (e.g. Tailscale -> dev, Corporate WireGuard -> work)
+    for vpn_rule in &config.vpn_rules {
+        let match_target = vpn_rule.match_name.to_lowercase();
+        if let Some(ref vpn_name) = net.active_vpn {
+            if vpn_name.to_lowercase().contains(&match_target) {
+                return Some(vpn_rule.profile.clone());
+            }
+        }
+        for tunnel in &net.vpn_tunnels {
+            if tunnel.to_lowercase().contains(&match_target) {
+                return Some(vpn_rule.profile.clone());
+            }
+        }
+    }
+
+    // 2. Default VPN Profile Fallback
+    if net.active_vpn.is_some() || !net.vpn_tunnels.is_empty() {
         if let Some(ref vpn_prof) = config.vpn_profile {
             if !vpn_prof.is_empty() {
                 return Some(vpn_prof.clone());
@@ -271,6 +341,7 @@ mod tests {
             primary_type: "wifi".to_string(),
             current_ssid: Some("CoffeeShop-Guest".to_string()),
             active_vpn: None,
+            vpn_tunnels: Vec::new(),
             active_devices: vec!["wlp2s0".to_string()],
         };
         assert_eq!(evaluate_posture(&config, &net1), Some("travel".to_string()));
@@ -280,6 +351,7 @@ mod tests {
             primary_type: "vpn".to_string(),
             current_ssid: Some("HomeNetwork".to_string()),
             active_vpn: Some("WorkVPN".to_string()),
+            vpn_tunnels: vec!["tun0".to_string()],
             active_devices: vec!["tun0".to_string()],
         };
         assert_eq!(evaluate_posture(&config, &net2), Some("work".to_string()));
@@ -289,8 +361,19 @@ mod tests {
             primary_type: "wifi".to_string(),
             current_ssid: Some("Airport-Public-Free".to_string()),
             active_vpn: None,
+            vpn_tunnels: Vec::new(),
             active_devices: vec!["wlp2s0".to_string()],
         };
         assert_eq!(evaluate_posture(&config, &net3), Some("travel".to_string()));
+
+        // Test Tailscale routing directly to dev profile
+        let net4 = ActiveNetworkInfo {
+            primary_type: "vpn".to_string(),
+            current_ssid: Some("HomeNetwork".to_string()),
+            active_vpn: Some("tailscale0".to_string()),
+            vpn_tunnels: vec!["tailscale0".to_string()],
+            active_devices: vec!["wlp2s0".to_string(), "tailscale0".to_string()],
+        };
+        assert_eq!(evaluate_posture(&config, &net4), Some("dev".to_string()));
     }
 }

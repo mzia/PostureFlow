@@ -4,6 +4,7 @@ use crate::autoflow::ActiveNetworkInfo;
 pub fn detect_active_networks_windows() -> ActiveNetworkInfo {
     let mut current_ssid = None;
     let mut active_vpn = None;
+    let mut vpn_tunnels = Vec::new();
     let mut active_devices = Vec::new();
     let mut primary_type = "none".to_string();
 
@@ -38,7 +39,8 @@ pub fn detect_active_networks_windows() -> ActiveNetworkInfo {
                         let dev = name.to_string();
                         active_devices.push(dev.clone());
                         if lower.contains("vpn") || lower.contains("wireguard") || lower.contains("tailscale") {
-                            active_vpn = Some(dev);
+                            active_vpn = Some(dev.clone());
+                            vpn_tunnels.push(dev.clone());
                             if primary_type != "wifi" {
                                 primary_type = "vpn".to_string();
                             }
@@ -55,6 +57,7 @@ pub fn detect_active_networks_windows() -> ActiveNetworkInfo {
         primary_type,
         current_ssid,
         active_vpn,
+        vpn_tunnels,
         active_devices,
     }
 }

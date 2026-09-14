@@ -1,5 +1,5 @@
 use eframe::egui::{self, Color32, CornerRadius, RichText, Stroke};
-use postureflow::autoflow::{self, ActiveNetworkInfo, AutoFlowConfig, NetworkRule};
+use postureflow::autoflow::{self, ActiveNetworkInfo, AutoFlowConfig, NetworkRule, VpnRule};
 use postureflow::config::{
     self, validate_and_sanitize, DesktopConfig, FirewallConfig, FrameworkPowerConfig,
     PeripheralsConfig, ProfileConfig, ProfileMetadata, SecurityLimitsConfig,
@@ -26,6 +26,7 @@ enum ProfileSubTab {
     Firewall,
     Kernel,
     Power,
+    Hooks,
 }
 
 struct GuiApp {
@@ -50,6 +51,9 @@ struct GuiApp {
     new_rule_ssid: String,
     new_rule_profile: String,
     new_rule_comment: String,
+    new_vpn_match: String,
+    new_vpn_profile: String,
+    new_vpn_comment: String,
 
     // App Triggers state
     triggers_config: TriggersConfig,
@@ -116,6 +120,9 @@ impl GuiApp {
             new_rule_ssid: String::new(),
             new_rule_profile: "home".to_string(),
             new_rule_comment: String::new(),
+            new_vpn_match: String::new(),
+            new_vpn_profile: "dev".to_string(),
+            new_vpn_comment: String::new(),
             triggers_config: triggers::load_triggers_config(),
             new_trigger_name: String::new(),
             new_trigger_procs: String::new(),
@@ -755,6 +762,31 @@ impl GuiApp {
                 ui.label(RichText::new(vpn_str).color(if self.active_network.active_vpn.is_some() { Color32::from_rgb(80, 250, 123) } else { Color32::from_rgb(160, 170, 195) }));
             });
 
+            if !self.active_network.vpn_tunnels.is_empty() {
+                ui.add_space(6.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(RichText::new("Detected Mesh / VPN Tunnels:").strong());
+                    for tun in &self.active_network.vpn_tunnels {
+                        let color = if tun.starts_with("tailscale") {
+                            Color32::from_rgb(72, 185, 199)
+                        } else if tun.starts_with("wg") {
+                            Color32::from_rgb(180, 120, 255)
+                        } else if tun.starts_with("zt") {
+                            Color32::from_rgb(255, 184, 108)
+                        } else {
+                            Color32::from_rgb(80, 250, 123)
+                        };
+                        egui::Frame::new()
+                            .fill(Color32::from_rgb(38, 42, 56))
+                            .inner_margin(egui::Margin::symmetric(6, 2))
+                            .corner_radius(CornerRadius::same(4))
+                            .show(ui, |ui| {
+                                ui.label(RichText::new(format!("🔒 {}", tun)).color(color).strong().small());
+                            });
+                    }
+                });
+            }
+
             let matched = autoflow::evaluate_posture(&self.autoflow_config, &self.active_network);
             ui.horizontal(|ui| {
                 ui.label(RichText::new("Auto-Flow Target Posture:").strong());
@@ -777,11 +809,11 @@ impl GuiApp {
 
         ui.add_space(12.0);
 
-        // Rules List
+        // Wi-Fi Rules List
         ui.heading("📋 Network Assignment Rules");
         let mut delete_index = None;
 
-        egui::ScrollArea::vertical().max_height(180.0).show(ui, |ui| {
+        egui::ScrollArea::vertical().id_salt("wifi_rules_scroll").max_height(140.0).show(ui, |ui| {
             for (idx, rule) in self.autoflow_config.rules.iter().enumerate() {
                 egui::Frame::new()
                     .fill(Color32::from_rgb(28, 31, 42))
@@ -820,9 +852,9 @@ impl GuiApp {
             self.autoflow_config.rules.remove(idx);
         }
 
-        ui.add_space(10.0);
+        ui.add_space(8.0);
 
-        // Add New Rule Form
+        // Add New Network Rule Form
         ui.group(|ui| {
             ui.label(RichText::new("Add Network Assignment Rule").strong());
             ui.horizontal(|ui| {
@@ -842,6 +874,84 @@ impl GuiApp {
                     });
                     self.new_rule_ssid.clear();
                     self.new_rule_comment.clear();
+                }
+            });
+        });
+
+        ui.add_space(14.0);
+
+        // VPN & Mesh Tunnel Routing Rules List
+        ui.heading("🔒 VPN & Mesh Tunnel Routing Rules");
+        ui.label(
+            RichText::new(
+                "Map specific VPN connections or mesh interfaces (e.g. Tailscale, WireGuard, ZeroTier) to target postures.",
+            )
+            .color(Color32::from_rgb(160, 170, 195))
+            .small(),
+        );
+        ui.add_space(6.0);
+
+        let mut delete_vpn_index = None;
+        egui::ScrollArea::vertical().id_salt("vpn_rules_scroll").max_height(140.0).show(ui, |ui| {
+            if self.autoflow_config.vpn_rules.is_empty() {
+                ui.label(RichText::new("No VPN routing rules defined. Default VPN fallback profile will be used.").italics().color(Color32::from_rgb(140, 150, 175)));
+            } else {
+                for (idx, rule) in self.autoflow_config.vpn_rules.iter().enumerate() {
+                    egui::Frame::new()
+                        .fill(Color32::from_rgb(28, 31, 42))
+                        .inner_margin(8)
+                        .corner_radius(CornerRadius::same(6))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new(format!("Match: \"{}\"", rule.match_name)).color(Color32::from_rgb(180, 120, 255)).strong());
+                                ui.label("➔");
+                                ui.label(RichText::new(format!("[{}]", rule.profile.to_uppercase())).color(Color32::from_rgb(246, 166, 35)).strong());
+
+                                if let Some(ref comm) = rule.comment {
+                                    ui.label(RichText::new(format!("({})", comm)).color(Color32::from_rgb(140, 150, 175)).small());
+                                }
+
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    if ui.button(RichText::new("🗑").color(Color32::from_rgb(255, 100, 100))).clicked() {
+                                        delete_vpn_index = Some(idx);
+                                    }
+                                });
+                            });
+                        });
+                    ui.add_space(4.0);
+                }
+            }
+        });
+
+        if let Some(idx) = delete_vpn_index {
+            self.autoflow_config.vpn_rules.remove(idx);
+        }
+
+        ui.add_space(8.0);
+
+        // Add New VPN Rule Form
+        ui.group(|ui| {
+            ui.label(RichText::new("Add VPN / Mesh Routing Rule").strong());
+            ui.horizontal(|ui| {
+                ui.label("Pattern:");
+                ui.add(egui::TextEdit::singleline(&mut self.new_vpn_match).hint_text("e.g. tailscale*, wg0, zt*"));
+                ui.label("Target Profile:");
+                ui.add(egui::TextEdit::singleline(&mut self.new_vpn_profile).desired_width(80.0));
+                ui.label("Note:");
+                ui.add(egui::TextEdit::singleline(&mut self.new_vpn_comment).hint_text("e.g. Work WireGuard"));
+
+                if ui.button("➕ Add VPN Rule").clicked() && !self.new_vpn_match.trim().is_empty() {
+                    self.autoflow_config.vpn_rules.push(VpnRule {
+                        match_name: self.new_vpn_match.trim().to_string(),
+                        profile: self.new_vpn_profile.trim().to_lowercase(),
+                        comment: if self.new_vpn_comment.trim().is_empty() {
+                            None
+                        } else {
+                            Some(self.new_vpn_comment.trim().to_string())
+                        },
+                    });
+                    self.new_vpn_match.clear();
+                    self.new_vpn_comment.clear();
                 }
             });
         });
@@ -1479,6 +1589,7 @@ impl GuiApp {
                             power: FrameworkPowerConfig::default(),
                             peripherals: PeripheralsConfig::default(),
                             desktop: DesktopConfig::default(),
+                            hooks: config::HooksConfig::default(),
                         };
                         let _ = config::save_custom_profile(new_cfg, system::is_privileged());
                         self.refresh_all();
@@ -1550,6 +1661,7 @@ impl GuiApp {
             ui.selectable_value(&mut self.profile_tab, ProfileSubTab::Firewall, "🛡️ Firewall & Ports");
             ui.selectable_value(&mut self.profile_tab, ProfileSubTab::Kernel, "⚙️ Kernel & Sysctl");
             ui.selectable_value(&mut self.profile_tab, ProfileSubTab::Power, "⚡ Power & Framework");
+            ui.selectable_value(&mut self.profile_tab, ProfileSubTab::Hooks, "🪝 Hooks & Services");
         });
         ui.separator();
 
@@ -1723,6 +1835,43 @@ impl GuiApp {
                     if ui.add_enabled(!is_builtin, egui::Checkbox::new(&mut bt, "📶 Bluetooth Radio Enabled")).changed() {
                         current_profile.peripherals.bluetooth = Some(bt);
                     }
+                }
+
+                ProfileSubTab::Hooks => {
+                    ui.label(RichText::new("Developer Service Lifecycle & Command Hooks").strong());
+                    ui.label(
+                        RichText::new(
+                            "Automatically suspend/resume Docker containers and start/stop background developer services when entering or leaving this profile.",
+                        )
+                        .small()
+                        .color(Color32::from_rgb(160, 170, 195)),
+                    );
+
+                    ui.add_space(8.0);
+                    let mut manage_doc = current_profile.hooks.manage_docker.unwrap_or(false);
+                    if ui.add_enabled(!is_builtin, egui::Checkbox::new(&mut manage_doc, "🐳 Manage Docker Containers (Auto-pause when leaving, unpause on enter)")).changed() {
+                        current_profile.hooks.manage_docker = Some(manage_doc);
+                    }
+
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.label(RichText::new("Lifecycle Shell Commands").strong());
+
+                    let mut on_enter = current_profile.hooks.on_enter.clone().unwrap_or_default();
+                    ui.horizontal(|ui| {
+                        ui.label("On Enter Command:");
+                        if ui.add_enabled(!is_builtin, egui::TextEdit::singleline(&mut on_enter).hint_text("e.g. systemctl --user start postgresql")).changed() {
+                            current_profile.hooks.on_enter = if on_enter.trim().is_empty() { None } else { Some(on_enter) };
+                        }
+                    });
+
+                    let mut on_exit = current_profile.hooks.on_exit.clone().unwrap_or_default();
+                    ui.horizontal(|ui| {
+                        ui.label("On Exit Command:");
+                        if ui.add_enabled(!is_builtin, egui::TextEdit::singleline(&mut on_exit).hint_text("e.g. systemctl --user stop postgresql")).changed() {
+                            current_profile.hooks.on_exit = if on_exit.trim().is_empty() { None } else { Some(on_exit) };
+                        }
+                    });
                 }
             }
 

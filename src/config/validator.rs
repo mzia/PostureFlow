@@ -189,6 +189,7 @@ mod tests {
             power: FrameworkPowerConfig::default(),
             peripherals: PeripheralsConfig::default(),
             desktop: DesktopConfig::default(),
+            hooks: HooksConfig::default(),
         }
     }
 

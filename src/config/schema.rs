@@ -104,6 +104,18 @@ pub struct DesktopConfig {
     pub idle_delay_seconds: Option<u32>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct HooksConfig {
+    #[serde(default)]
+    pub on_enter: Option<String>,
+    #[serde(default)]
+    pub on_exit: Option<String>,
+    #[serde(default)]
+    pub manage_docker: Option<bool>,
+    #[serde(default)]
+    pub manage_systemd_services: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProfileConfig {
     pub profile: ProfileMetadata,
@@ -119,6 +131,8 @@ pub struct ProfileConfig {
     pub peripherals: PeripheralsConfig,
     #[serde(default)]
     pub desktop: DesktopConfig,
+    #[serde(default)]
+    pub hooks: HooksConfig,
 }
 
 impl ProfileConfig {

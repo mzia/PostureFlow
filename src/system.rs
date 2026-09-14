@@ -192,7 +192,11 @@ pub fn apply_profile_by_id(id: &str) -> Result<(), String> {
 }
 
 pub fn apply_profile_config(config: &crate::config::ProfileConfig) -> Result<(), String> {
+    let previous_id = get_active_profile();
+    let previous_config = crate::config::find_profile(&previous_id);
+
     if !is_privileged() {
+        apply_lifecycle_hooks(previous_config.as_ref(), config);
         save_active_profile_str(&config.profile.id)?;
         return Ok(());
     }
@@ -204,6 +208,7 @@ pub fn apply_profile_config(config: &crate::config::ProfileConfig) -> Result<(),
         if let Some(idle) = config.desktop.idle_delay_seconds {
             crate::platform::windows::power::set_windows_idle_timeout(idle);
         }
+        apply_lifecycle_hooks(previous_config.as_ref(), config);
         save_active_profile_str(&config.profile.id)?;
         return Ok(());
     }
@@ -295,8 +300,56 @@ pub fn apply_profile_config(config: &crate::config::ProfileConfig) -> Result<(),
         let _ = apply_bluetooth(bt);
     }
 
+    apply_lifecycle_hooks(previous_config.as_ref(), config);
     save_active_profile_str(&config.profile.id)?;
     Ok(())
+    }
+}
+
+pub fn apply_lifecycle_hooks(previous: Option<&crate::config::ProfileConfig>, target: &crate::config::ProfileConfig) {
+    #[cfg(unix)]
+    {
+        // 1. Exiting previous profile: run on_exit command and pause dev services
+        if let Some(prev) = previous {
+            if prev.profile.id != target.profile.id {
+                if let Some(ref exit_cmd) = prev.hooks.on_exit {
+                    let _ = Command::new("sh").args(["-c", exit_cmd]).spawn();
+                }
+
+                // If leaving Docker-managed profile (e.g. dev) and target does not manage it, pause containers
+                if prev.hooks.manage_docker == Some(true) && target.hooks.manage_docker != Some(true) {
+                    let _ = Command::new("sh")
+                        .args(["-c", "if command -v docker >/dev/null 2>&1; then c=$(docker ps -q 2>/dev/null); if [ -n \"$c\" ]; then docker pause $c >/dev/null 2>&1; fi; fi"])
+                        .spawn();
+                }
+
+                // Stop user systemd services managed by previous profile if not in target
+                for srv in &prev.hooks.manage_systemd_services {
+                    if !target.hooks.manage_systemd_services.contains(srv) {
+                        let _ = Command::new("systemctl")
+                            .args(["--user", "stop", srv])
+                            .spawn();
+                    }
+                }
+            }
+        }
+
+        // 2. Entering target profile: resume Docker containers & start user services
+        if target.hooks.manage_docker == Some(true) {
+            let _ = Command::new("sh")
+                .args(["-c", "if command -v docker >/dev/null 2>&1; then p=$(docker ps -q -f status=paused 2>/dev/null); if [ -n \"$p\" ]; then docker unpause $p >/dev/null 2>&1; fi; fi"])
+                .spawn();
+        }
+
+        for srv in &target.hooks.manage_systemd_services {
+            let _ = Command::new("systemctl")
+                .args(["--user", "start", srv])
+                .spawn();
+        }
+
+        if let Some(ref enter_cmd) = target.hooks.on_enter {
+            let _ = Command::new("sh").args(["-c", enter_cmd]).spawn();
+        }
     }
 }
 

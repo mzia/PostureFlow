@@ -2,7 +2,7 @@ pub mod schema;
 pub mod validator;
 
 pub use schema::{
-    DesktopConfig, FirewallConfig, FrameworkPowerConfig, PeripheralsConfig, PortRule, ProfileConfig,
+    DesktopConfig, FirewallConfig, FrameworkPowerConfig, HooksConfig, PeripheralsConfig, PortRule, ProfileConfig,
     ProfileMetadata, SecurityLimitsConfig,
 };
 pub use validator::{validate_and_sanitize, ValidationReport};
@@ -90,6 +90,7 @@ fn builtin_home() -> ProfileConfig {
             bluetooth: Some(true),
         },
         desktop: DesktopConfig { idle_delay_seconds: Some(1800) },
+        hooks: HooksConfig::default(),
     }
 }
 
@@ -145,6 +146,7 @@ fn builtin_work() -> ProfileConfig {
             bluetooth: Some(true),
         },
         desktop: DesktopConfig { idle_delay_seconds: Some(300) },
+        hooks: HooksConfig::default(),
     }
 }
 
@@ -205,6 +207,12 @@ fn builtin_dev() -> ProfileConfig {
             bluetooth: Some(true),
         },
         desktop: DesktopConfig { idle_delay_seconds: Some(1800) },
+        hooks: HooksConfig {
+            on_enter: None,
+            on_exit: None,
+            manage_docker: Some(true),
+            manage_systemd_services: Vec::new(),
+        },
     }
 }
 
@@ -261,6 +269,7 @@ fn builtin_travel() -> ProfileConfig {
             bluetooth: Some(true),
         },
         desktop: DesktopConfig { idle_delay_seconds: Some(120) },
+        hooks: HooksConfig::default(),
     }
 }
 
