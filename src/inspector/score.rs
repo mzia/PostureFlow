@@ -119,6 +119,19 @@ impl PostureScoreReport {
             recommendations.push("🛡️ BadUSB Defense: Hardware USB auto-authorization is locked down.".to_string());
         }
 
+        let dns_status = crate::system::get_dns_status();
+        if dns_status.is_encrypted {
+            recommendations.push(format!(
+                "🔒 Encrypted DNS: DNS-over-TLS is active (mode: {}, DNSSEC: {}).",
+                dns_status.dns_over_tls, dns_status.dnssec
+            ));
+        } else {
+            let active_profile = crate::system::get_active_profile();
+            if active_profile == "travel" {
+                recommendations.push("⚠️ DNS queries are unencrypted (plaintext UDP 53). Enable DNS-over-TLS in Travel profile.".to_string());
+            }
+        }
+
         let total_score = firewall_score + attack_surface_score + kernel_score + limits_score;
 
         let letter_grade = match total_score {

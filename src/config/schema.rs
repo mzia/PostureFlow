@@ -116,6 +116,20 @@ pub struct HooksConfig {
     pub manage_systemd_services: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct DnsConfig {
+    #[serde(default)]
+    pub servers: Vec<String>,
+    #[serde(default)]
+    pub fallback_servers: Vec<String>,
+    #[serde(default)]
+    pub dns_over_tls: Option<String>,
+    #[serde(default)]
+    pub dnssec: Option<String>,
+    #[serde(default)]
+    pub domains: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProfileConfig {
     pub profile: ProfileMetadata,
@@ -133,6 +147,8 @@ pub struct ProfileConfig {
     pub desktop: DesktopConfig,
     #[serde(default)]
     pub hooks: HooksConfig,
+    #[serde(default)]
+    pub dns: DnsConfig,
 }
 
 impl ProfileConfig {

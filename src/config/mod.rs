@@ -2,7 +2,7 @@ pub mod schema;
 pub mod validator;
 
 pub use schema::{
-    DesktopConfig, FirewallConfig, FrameworkPowerConfig, HooksConfig, PeripheralsConfig, PortRule, ProfileConfig,
+    DesktopConfig, DnsConfig, FirewallConfig, FrameworkPowerConfig, HooksConfig, PeripheralsConfig, PortRule, ProfileConfig,
     ProfileMetadata, SecurityLimitsConfig,
 };
 pub use validator::{validate_and_sanitize, ValidationReport};
@@ -91,6 +91,7 @@ fn builtin_home() -> ProfileConfig {
         },
         desktop: DesktopConfig { idle_delay_seconds: Some(1800) },
         hooks: HooksConfig::default(),
+        dns: DnsConfig::default(),
     }
 }
 
@@ -147,6 +148,7 @@ fn builtin_work() -> ProfileConfig {
         },
         desktop: DesktopConfig { idle_delay_seconds: Some(300) },
         hooks: HooksConfig::default(),
+        dns: DnsConfig::default(),
     }
 }
 
@@ -213,6 +215,13 @@ fn builtin_dev() -> ProfileConfig {
             manage_docker: Some(true),
             manage_systemd_services: Vec::new(),
         },
+        dns: DnsConfig {
+            servers: Vec::new(),
+            fallback_servers: Vec::new(),
+            dns_over_tls: Some("opportunistic".to_string()),
+            dnssec: Some("allow-downgrade".to_string()),
+            domains: vec!["test".to_string(), "internal".to_string()],
+        },
     }
 }
 
@@ -270,6 +279,20 @@ fn builtin_travel() -> ProfileConfig {
         },
         desktop: DesktopConfig { idle_delay_seconds: Some(120) },
         hooks: HooksConfig::default(),
+        dns: DnsConfig {
+            servers: vec![
+                "9.9.9.9#dns.quad9.net".to_string(),
+                "149.112.112.112#dns.quad9.net".to_string(),
+                "2620:fe::fe#dns.quad9.net".to_string(),
+            ],
+            fallback_servers: vec![
+                "1.1.1.1#cloudflare-dns.com".to_string(),
+                "8.8.8.8#dns.google".to_string(),
+            ],
+            dns_over_tls: Some("yes".to_string()),
+            dnssec: Some("yes".to_string()),
+            domains: vec!["~.".to_string()],
+        },
     }
 }
 

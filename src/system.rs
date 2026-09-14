@@ -1,5 +1,6 @@
 use std::fs;
 use std::process::Command;
+use serde::{Deserialize, Serialize};
 use crate::profile::Profile;
 
 #[cfg(unix)]
@@ -9,6 +10,7 @@ pub const STATE_FILE: &str = r"C:\ProgramData\PostureFlow\state";
 
 pub const SYSCTL_CONF: &str = "/etc/sysctl.d/99-postureflow.conf";
 pub const LIMITS_CONF: &str = "/etc/security/limits.d/99-postureflow.conf";
+pub const RESOLVED_CONF: &str = "/etc/systemd/resolved.conf.d/99-postureflow.conf";
 
 #[cfg(unix)]
 pub fn is_privileged() -> bool {
@@ -300,6 +302,9 @@ pub fn apply_profile_config(config: &crate::config::ProfileConfig) -> Result<(),
         let _ = apply_bluetooth(bt);
     }
 
+    // 7. Profile-Aware Encrypted DNS & Privacy Orchestration
+    let _ = apply_dns_config(&config.dns);
+
     apply_lifecycle_hooks(previous_config.as_ref(), config);
     save_active_profile_str(&config.profile.id)?;
     Ok(())
@@ -423,6 +428,145 @@ pub fn is_bluetooth_blocked() -> bool {
         .unwrap_or(false)
 }
 
+pub fn apply_dns_config(dns: &crate::config::schema::DnsConfig) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        if !is_privileged() {
+            return Ok(());
+        }
+
+        let has_custom_dns = !dns.servers.is_empty()
+            || !dns.fallback_servers.is_empty()
+            || dns.dns_over_tls.is_some()
+            || dns.dnssec.is_some()
+            || !dns.domains.is_empty();
+
+        if !has_custom_dns {
+            if std::path::Path::new(RESOLVED_CONF).exists() {
+                let _ = fs::remove_file(RESOLVED_CONF);
+                let _ = execute("systemctl", &["reload-or-restart", "systemd-resolved"]);
+            }
+            return Ok(());
+        }
+
+        let mut conf = String::from("# PostureFlow Profile-Aware Encrypted DNS & Privacy Configuration\n[Resolve]\n");
+        if !dns.servers.is_empty() {
+            conf.push_str(&format!("DNS={}\n", dns.servers.join(" ")));
+        }
+        if !dns.fallback_servers.is_empty() {
+            conf.push_str(&format!("FallbackDNS={}\n", dns.fallback_servers.join(" ")));
+        }
+        if let Some(ref dot) = dns.dns_over_tls {
+            conf.push_str(&format!("DNSOverTLS={}\n", dot));
+        }
+        if let Some(ref sec) = dns.dnssec {
+            conf.push_str(&format!("DNSSEC={}\n", sec));
+        }
+        if !dns.domains.is_empty() {
+            conf.push_str(&format!("Domains={}\n", dns.domains.join(" ")));
+        }
+
+        if let Some(parent) = std::path::Path::new(RESOLVED_CONF).parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        fs::write(RESOLVED_CONF, conf).map_err(|e| format!("Failed to write resolved drop-in: {}", e))?;
+        let _ = execute("systemctl", &["reload-or-restart", "systemd-resolved"]);
+    }
+    Ok(())
+}
+
+pub fn clear_dns_config() -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        if !is_privileged() {
+            return Ok(());
+        }
+        if std::path::Path::new(RESOLVED_CONF).exists() {
+            let _ = fs::remove_file(RESOLVED_CONF);
+            let _ = execute("systemctl", &["reload-or-restart", "systemd-resolved"]);
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct DnsStatusReport {
+    pub is_encrypted: bool,
+    pub dns_over_tls: String,
+    pub dnssec: String,
+    pub active_servers: Vec<String>,
+    pub managed_by_postureflow: bool,
+}
+
+pub fn get_dns_status() -> DnsStatusReport {
+    #[cfg(unix)]
+    {
+        let managed = std::path::Path::new(RESOLVED_CONF).exists();
+        let mut is_encrypted = false;
+        let mut dns_over_tls = "no".to_string();
+        let mut dnssec = "no".to_string();
+        let mut active_servers = Vec::new();
+
+        if let Ok(content) = fs::read_to_string(RESOLVED_CONF) {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if let Some(rest) = trimmed.strip_prefix("DNS=") {
+                    active_servers = rest.split_whitespace().map(|s| s.to_string()).collect();
+                } else if let Some(rest) = trimmed.strip_prefix("DNSOverTLS=") {
+                    dns_over_tls = rest.to_string();
+                    if dns_over_tls == "yes" || dns_over_tls == "opportunistic" {
+                        is_encrypted = true;
+                    }
+                } else if let Some(rest) = trimmed.strip_prefix("DNSSEC=") {
+                    dnssec = rest.to_string();
+                }
+            }
+        }
+
+        if active_servers.is_empty() {
+            if let Ok(out) = execute("resolvectl", &["status", "--no-pager"]) {
+                if out.contains("+DNSOverTLS") || out.contains("DNSOverTLS=yes") {
+                    is_encrypted = true;
+                    dns_over_tls = "yes".to_string();
+                }
+                if out.contains("DNSSEC=yes") {
+                    dnssec = "yes".to_string();
+                }
+                for line in out.lines() {
+                    if line.contains("DNS Servers:") || line.contains("Current DNS Server:") {
+                        let parts: Vec<&str> = line.split(':').collect();
+                        if parts.len() >= 2 {
+                            for s in parts[1].split_whitespace() {
+                                if !active_servers.contains(&s.to_string()) {
+                                    active_servers.push(s.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        DnsStatusReport {
+            is_encrypted,
+            dns_over_tls,
+            dnssec,
+            active_servers,
+            managed_by_postureflow: managed,
+        }
+    }
+    #[cfg(windows)]
+    {
+        DnsStatusReport {
+            is_encrypted: false,
+            dns_over_tls: "no".to_string(),
+            dnssec: "no".to_string(),
+            active_servers: Vec::new(),
+            managed_by_postureflow: false,
+        }
+    }
+}
+
 pub fn reset_to_defaults() -> Result<(), String> {
     let path = state_file_path();
     let _ = fs::remove_file(&path);
@@ -481,6 +625,9 @@ pub fn reset_to_defaults() -> Result<(), String> {
         // Restore Bluetooth radio to unblocked
         let _ = apply_bluetooth(true);
 
+        // Clear encrypted DNS configuration and restore default resolution
+        let _ = clear_dns_config();
+
         Ok(())
     }
 }
@@ -505,13 +652,22 @@ pub fn get_status_report() -> String {
         let cpu_epp = get_cpu_epp().unwrap_or_else(|| "N/A".into());
         let usb_lockdown = if is_usb_locked_down() { "ENGAGED (BadUSB Blocked)" } else { "Standard (Auto-authorized)" };
         let bt_status = if is_bluetooth_blocked() { "Blocked / Radio Off" } else { "Active / Unblocked" };
+        let dns_status = get_dns_status();
+        let dns_summary = if dns_status.is_encrypted {
+            format!("🔒 Encrypted (DoT: {}, DNSSEC: {})", dns_status.dns_over_tls, dns_status.dnssec)
+        } else if !dns_status.active_servers.is_empty() {
+            format!("⚠️ Plaintext ({})", dns_status.active_servers.join(", "))
+        } else {
+            "System Default (DHCP)".to_string()
+        };
 
         format!(
-            "Active Profile: {}\nCPU EPP Mode:   {}\nUSB Security:   {}\nBluetooth:      {}\nptrace_scope:   {}\ninotify watches:{}\nvm.max_map_count: {}\nUFW Status:\n{}",
+            "Active Profile: {}\nCPU EPP Mode:   {}\nUSB Security:   {}\nBluetooth:      {}\nDNS Privacy:    {}\nptrace_scope:   {}\ninotify watches:{}\nvm.max_map_count: {}\nUFW Status:\n{}",
             profile.to_uppercase(),
             cpu_epp,
             usb_lockdown,
             bt_status,
+            dns_summary,
             ptrace,
             inotify,
             map_count,
@@ -548,6 +704,35 @@ pub fn block_port(port: u16, proto: &str) -> Result<(), String> {
         execute("ufw", &["deny", &rule, "comment", "Blocked via PostureFlow Port Inspector"])?;
         let _ = execute("ufw", &["reload"]);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dns_status_report_default() {
+        let rep = DnsStatusReport::default();
+        assert!(!rep.is_encrypted);
+        assert_eq!(rep.dns_over_tls, "");
+        assert_eq!(rep.dnssec, "");
+        assert!(rep.active_servers.is_empty());
+        assert!(!rep.managed_by_postureflow);
+    }
+
+    #[test]
+    fn test_dns_status_report_serialization() {
+        let rep = DnsStatusReport {
+            is_encrypted: true,
+            dns_over_tls: "yes".to_string(),
+            dnssec: "yes".to_string(),
+            active_servers: vec!["9.9.9.9#dns.quad9.net".to_string()],
+            managed_by_postureflow: true,
+        };
+        let json = serde_json::to_string(&rep).unwrap();
+        let deserialized: DnsStatusReport = serde_json::from_str(&json).unwrap();
+        assert_eq!(rep, deserialized);
     }
 }
 

@@ -1,8 +1,8 @@
 use eframe::egui::{self, Color32, CornerRadius, RichText, Stroke};
 use postureflow::autoflow::{self, ActiveNetworkInfo, AutoFlowConfig, NetworkRule, VpnRule};
 use postureflow::config::{
-    self, validate_and_sanitize, DesktopConfig, FirewallConfig, FrameworkPowerConfig,
-    PeripheralsConfig, ProfileConfig, ProfileMetadata, SecurityLimitsConfig,
+    self, validate_and_sanitize, DesktopConfig, DnsConfig, FirewallConfig, FrameworkPowerConfig,
+    HooksConfig, PeripheralsConfig, ProfileConfig, ProfileMetadata, SecurityLimitsConfig,
 };
 use postureflow::inspector::{self, ListeningPort, PostureScoreReport};
 use postureflow::triggers::{self, TriggerRule, TriggersConfig};
@@ -27,6 +27,7 @@ enum ProfileSubTab {
     Kernel,
     Power,
     Hooks,
+    Dns,
 }
 
 struct GuiApp {
@@ -77,6 +78,9 @@ struct GuiApp {
     new_port_comment: String,
     new_sysctl_key: String,
     new_sysctl_val: String,
+    new_dns_server: String,
+    new_dns_fallback: String,
+    new_dns_domain: String,
 }
 
 impl GuiApp {
@@ -140,6 +144,9 @@ impl GuiApp {
             new_port_comment: "Web Development".to_string(),
             new_sysctl_key: "fs.inotify.max_user_watches".to_string(),
             new_sysctl_val: "524288".to_string(),
+            new_dns_server: String::new(),
+            new_dns_fallback: String::new(),
+            new_dns_domain: String::new(),
         }
     }
 
@@ -548,6 +555,48 @@ impl GuiApp {
                     ui.label("suid_dumpable: 2 (gdb)");
                     ui.label("file watchers: 524k");
                 });
+            });
+
+            ui.add_space(12.0);
+
+            // Active DNS Encryption & Privacy Card
+            let dns_status = system::get_dns_status();
+            ui.group(|ui| {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("🌐 Active DNS Privacy & Encryption:").strong());
+                    if dns_status.is_encrypted {
+                        ui.label(
+                            RichText::new(format!("🔒 ENCRYPTED (DoT: {}, DNSSEC: {})", dns_status.dns_over_tls.to_uppercase(), dns_status.dnssec.to_uppercase()))
+                                .color(Color32::from_rgb(80, 250, 123))
+                                .strong(),
+                        );
+                    } else {
+                        ui.label(
+                            RichText::new("⚠️ PLAINTEXT (Unencrypted UDP 53)")
+                                .color(Color32::from_rgb(246, 166, 35))
+                                .strong(),
+                        );
+                    }
+
+                    if dns_status.managed_by_postureflow {
+                        ui.label(RichText::new("[Managed by PostureFlow]").small().color(Color32::from_rgb(72, 185, 199)));
+                    }
+                });
+
+                if !dns_status.active_servers.is_empty() {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(RichText::new("Active Resolvers:").small().color(Color32::from_rgb(160, 170, 195)));
+                        for srv in &dns_status.active_servers {
+                            egui::Frame::new()
+                                .fill(Color32::from_rgb(38, 42, 56))
+                                .inner_margin(egui::Margin::symmetric(6, 2))
+                                .corner_radius(CornerRadius::same(4))
+                                .show(ui, |ui| {
+                                    ui.label(RichText::new(srv).small().color(Color32::from_rgb(180, 190, 215)));
+                                });
+                        }
+                    });
+                }
             });
 
             ui.add_space(16.0);
@@ -1589,7 +1638,8 @@ impl GuiApp {
                             power: FrameworkPowerConfig::default(),
                             peripherals: PeripheralsConfig::default(),
                             desktop: DesktopConfig::default(),
-                            hooks: config::HooksConfig::default(),
+                            hooks: HooksConfig::default(),
+                            dns: DnsConfig::default(),
                         };
                         let _ = config::save_custom_profile(new_cfg, system::is_privileged());
                         self.refresh_all();
@@ -1662,6 +1712,7 @@ impl GuiApp {
             ui.selectable_value(&mut self.profile_tab, ProfileSubTab::Kernel, "⚙️ Kernel & Sysctl");
             ui.selectable_value(&mut self.profile_tab, ProfileSubTab::Power, "⚡ Power & Framework");
             ui.selectable_value(&mut self.profile_tab, ProfileSubTab::Hooks, "🪝 Hooks & Services");
+            ui.selectable_value(&mut self.profile_tab, ProfileSubTab::Dns, "🌐 DNS & Privacy");
         });
         ui.separator();
 
@@ -1872,6 +1923,228 @@ impl GuiApp {
                             current_profile.hooks.on_exit = if on_exit.trim().is_empty() { None } else { Some(on_exit) };
                         }
                     });
+                }
+
+                ProfileSubTab::Dns => {
+                    ui.label(RichText::new("Profile-Aware Encrypted DNS & DNS-over-TLS (systemd-resolved)").strong());
+                    ui.label(
+                        RichText::new(
+                            "Route DNS queries securely via systemd-resolved to prevent eavesdropping, ISP tracking, and DNS tampering. Strict DoT encrypts port 853 traffic with TLS.",
+                        )
+                        .small()
+                        .color(Color32::from_rgb(160, 170, 195)),
+                    );
+
+                    ui.add_space(8.0);
+                    ui.label(RichText::new("⚡ Quick Privacy Presets").strong());
+                    ui.horizontal_wrapped(|ui| {
+                        if ui.add_enabled(!is_builtin, egui::Button::new("🔒 Quad9 Strict (DoT + DNSSEC)")).clicked() {
+                            current_profile.dns.servers = vec![
+                                "9.9.9.9#dns.quad9.net".to_string(),
+                                "149.112.112.112#dns.quad9.net".to_string(),
+                            ];
+                            current_profile.dns.fallback_servers = vec![
+                                "1.1.1.1#cloudflare-dns.com".to_string(),
+                            ];
+                            current_profile.dns.dns_over_tls = Some("yes".to_string());
+                            current_profile.dns.dnssec = Some("yes".to_string());
+                            current_profile.dns.domains = vec!["~.".to_string()];
+                        }
+
+                        if ui.add_enabled(!is_builtin, egui::Button::new("⚡ Cloudflare 1.1.1.1 (Strict DoT)")).clicked() {
+                            current_profile.dns.servers = vec![
+                                "1.1.1.1#cloudflare-dns.com".to_string(),
+                                "1.0.0.1#cloudflare-dns.com".to_string(),
+                            ];
+                            current_profile.dns.fallback_servers = vec![
+                                "9.9.9.9#dns.quad9.net".to_string(),
+                            ];
+                            current_profile.dns.dns_over_tls = Some("yes".to_string());
+                            current_profile.dns.dnssec = Some("yes".to_string());
+                            current_profile.dns.domains = vec!["~.".to_string()];
+                        }
+
+                        if ui.add_enabled(!is_builtin, egui::Button::new("🛡️ AdGuard (Ad-Blocking DoT)")).clicked() {
+                            current_profile.dns.servers = vec![
+                                "94.140.14.14#dns.adguard-dns.com".to_string(),
+                                "94.140.15.15#dns.adguard-dns.com".to_string(),
+                            ];
+                            current_profile.dns.fallback_servers = vec![
+                                "9.9.9.9#dns.quad9.net".to_string(),
+                            ];
+                            current_profile.dns.dns_over_tls = Some("yes".to_string());
+                            current_profile.dns.dnssec = Some("yes".to_string());
+                            current_profile.dns.domains = vec!["~.".to_string()];
+                        }
+
+                        if ui.add_enabled(!is_builtin, egui::Button::new("🔄 System Default (DHCP)")).clicked() {
+                            current_profile.dns.servers.clear();
+                            current_profile.dns.fallback_servers.clear();
+                            current_profile.dns.dns_over_tls = None;
+                            current_profile.dns.dnssec = None;
+                            current_profile.dns.domains.clear();
+                        }
+                    });
+
+                    ui.add_space(8.0);
+                    ui.separator();
+
+                    ui.label(RichText::new("Encryption & Validation Policies").strong());
+                    ui.horizontal(|ui| {
+                        ui.label("DNS-over-TLS (DoT):");
+                        let dot_display = match current_profile.dns.dns_over_tls.as_deref() {
+                            Some("yes") => "Strict (yes) - Enforce TLS",
+                            Some("opportunistic") => "Opportunistic - Encrypt if supported",
+                            Some("no") => "Disabled (no) - Plaintext DNS",
+                            _ => "Unmanaged / System Default",
+                        };
+
+                        egui::ComboBox::from_id_salt("profile_dot_combo")
+                            .selected_text(dot_display)
+                            .show_ui(ui, |ui| {
+                                if !is_builtin {
+                                    if ui.selectable_label(current_profile.dns.dns_over_tls.is_none(), "Unmanaged / System Default").clicked() {
+                                        current_profile.dns.dns_over_tls = None;
+                                    }
+                                    if ui.selectable_label(current_profile.dns.dns_over_tls.as_deref() == Some("yes"), "Strict (yes) - Enforce TLS").clicked() {
+                                        current_profile.dns.dns_over_tls = Some("yes".to_string());
+                                    }
+                                    if ui.selectable_label(current_profile.dns.dns_over_tls.as_deref() == Some("opportunistic"), "Opportunistic - Encrypt if supported").clicked() {
+                                        current_profile.dns.dns_over_tls = Some("opportunistic".to_string());
+                                    }
+                                    if ui.selectable_label(current_profile.dns.dns_over_tls.as_deref() == Some("no"), "Disabled (no) - Plaintext DNS").clicked() {
+                                        current_profile.dns.dns_over_tls = Some("no".to_string());
+                                    }
+                                }
+                            });
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("DNSSEC Validation:");
+                        let dnssec_display = match current_profile.dns.dnssec.as_deref() {
+                            Some("yes") => "Strict (yes) - Cryptographic verification",
+                            Some("allow-downgrade") => "Allow Downgrade - Verify if signed",
+                            Some("no") => "Disabled (no)",
+                            _ => "Unmanaged / System Default",
+                        };
+
+                        egui::ComboBox::from_id_salt("profile_dnssec_combo")
+                            .selected_text(dnssec_display)
+                            .show_ui(ui, |ui| {
+                                if !is_builtin {
+                                    if ui.selectable_label(current_profile.dns.dnssec.is_none(), "Unmanaged / System Default").clicked() {
+                                        current_profile.dns.dnssec = None;
+                                    }
+                                    if ui.selectable_label(current_profile.dns.dnssec.as_deref() == Some("yes"), "Strict (yes) - Cryptographic verification").clicked() {
+                                        current_profile.dns.dnssec = Some("yes".to_string());
+                                    }
+                                    if ui.selectable_label(current_profile.dns.dnssec.as_deref() == Some("allow-downgrade"), "Allow Downgrade - Verify if signed").clicked() {
+                                        current_profile.dns.dnssec = Some("allow-downgrade".to_string());
+                                    }
+                                    if ui.selectable_label(current_profile.dns.dnssec.as_deref() == Some("no"), "Disabled (no)").clicked() {
+                                        current_profile.dns.dnssec = Some("no".to_string());
+                                    }
+                                }
+                            });
+                    });
+
+                    ui.add_space(8.0);
+                    ui.separator();
+
+                    ui.label(RichText::new("Primary Upstream DNS Resolvers").strong());
+                    let mut remove_server = None;
+                    for (idx, s) in current_profile.dns.servers.iter().enumerate() {
+                        ui.horizontal(|ui| {
+                            ui.label(format!("• {s}"));
+                            if !is_builtin && ui.button("🗑").clicked() {
+                                remove_server = Some(idx);
+                            }
+                        });
+                    }
+                    if let Some(idx) = remove_server {
+                        current_profile.dns.servers.remove(idx);
+                    }
+
+                    if !is_builtin {
+                        ui.horizontal(|ui| {
+                            ui.add(egui::TextEdit::singleline(&mut self.new_dns_server).hint_text("e.g. 9.9.9.9#dns.quad9.net").desired_width(220.0));
+                            if ui.button("➕ Add Server").clicked() {
+                                let trimmed = self.new_dns_server.trim().to_string();
+                                if !trimmed.is_empty() && !current_profile.dns.servers.contains(&trimmed) {
+                                    current_profile.dns.servers.push(trimmed);
+                                    self.new_dns_server.clear();
+                                }
+                            }
+                        });
+                    }
+
+                    ui.add_space(8.0);
+                    ui.separator();
+
+                    ui.label(RichText::new("Fallback DNS Resolvers").strong());
+                    let mut remove_fallback = None;
+                    for (idx, s) in current_profile.dns.fallback_servers.iter().enumerate() {
+                        ui.horizontal(|ui| {
+                            ui.label(format!("• {s}"));
+                            if !is_builtin && ui.button("🗑").clicked() {
+                                remove_fallback = Some(idx);
+                            }
+                        });
+                    }
+                    if let Some(idx) = remove_fallback {
+                        current_profile.dns.fallback_servers.remove(idx);
+                    }
+
+                    if !is_builtin {
+                        ui.horizontal(|ui| {
+                            ui.add(egui::TextEdit::singleline(&mut self.new_dns_fallback).hint_text("e.g. 1.1.1.1#cloudflare-dns.com").desired_width(220.0));
+                            if ui.button("➕ Add Fallback").clicked() {
+                                let trimmed = self.new_dns_fallback.trim().to_string();
+                                if !trimmed.is_empty() && !current_profile.dns.fallback_servers.contains(&trimmed) {
+                                    current_profile.dns.fallback_servers.push(trimmed);
+                                    self.new_dns_fallback.clear();
+                                }
+                            }
+                        });
+                    }
+
+                    ui.add_space(8.0);
+                    ui.separator();
+
+                    ui.label(RichText::new("Routing & Search Domains").strong());
+                    ui.label(
+                        RichText::new(
+                            "Routing domain '~.' forces all DNS traffic through the configured servers. Internal domains (e.g. '~corp') route only specific queries.",
+                        )
+                        .small()
+                        .color(Color32::from_rgb(160, 170, 195)),
+                    );
+
+                    let mut remove_domain = None;
+                    for (idx, d) in current_profile.dns.domains.iter().enumerate() {
+                        ui.horizontal(|ui| {
+                            ui.label(format!("• {d}"));
+                            if !is_builtin && ui.button("🗑").clicked() {
+                                remove_domain = Some(idx);
+                            }
+                        });
+                    }
+                    if let Some(idx) = remove_domain {
+                        current_profile.dns.domains.remove(idx);
+                    }
+
+                    if !is_builtin {
+                        ui.horizontal(|ui| {
+                            ui.add(egui::TextEdit::singleline(&mut self.new_dns_domain).hint_text("e.g. ~. or corp.internal").desired_width(220.0));
+                            if ui.button("➕ Add Domain").clicked() {
+                                let trimmed = self.new_dns_domain.trim().to_string();
+                                if !trimmed.is_empty() && !current_profile.dns.domains.contains(&trimmed) {
+                                    current_profile.dns.domains.push(trimmed);
+                                    self.new_dns_domain.clear();
+                                }
+                            }
+                        });
+                    }
                 }
             }
 
