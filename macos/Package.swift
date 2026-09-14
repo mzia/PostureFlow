@@ -23,7 +23,7 @@ let package = Package(
         ),
         .executable(
             name: "postureflow",
-            targets: ["postureflow-cli"]
+            targets: ["postureflow"]
         )
     ],
     dependencies: [],
@@ -51,7 +51,7 @@ let package = Package(
         
         // Terminal CLI utility for macOS
         .executableTarget(
-            name: "postureflow-cli",
+            name: "postureflow",
             dependencies: ["PostureFlowShared"],
             path: "Sources/postureflow-cli"
         ),

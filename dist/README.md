@@ -28,12 +28,13 @@ sudo apt remove --purge -y postureflow
 
 ## 🪟 Windows: Windows 11 (24H2 / 23H2 x86_64)
 
-* **Package:** `postureflow_1.0.0_windows_x64.zip`
+* **Package:** `postureflow_1.0.0_windows_x64.zip` (8.0 MB)
 * **Contents:**
+  * `postureflow-daemon.exe` (Background posture and network monitor)
+  * `postureflow-gui.exe` (Security Cockpit UI for Windows)
   * `install.ps1` (Automated elevated PowerShell installer)
   * `uninstall.ps1` (Automated elevated PowerShell uninstaller)
   * `PostureFlow.manifest` (PerMonitorV2 High-DPI application manifest)
-  * WiX Toolset installer definition (`PostureFlow.wxs` / `build_msi.ps1`)
   * Documentation & system service definitions
 
 ### Installation (Run PowerShell as Administrator)

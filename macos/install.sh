@@ -42,6 +42,13 @@ if [ -f "$BIN_DIR/postureflow" ]; then
     echo -e "${GREEN}  -> Installed /usr/local/bin/postureflow${NC}"
 fi
 
+if [ -f "$BIN_DIR/PostureFlowApp" ]; then
+    mkdir -p /Applications/PostureFlow.app/Contents/MacOS
+    cp -f "$BIN_DIR/PostureFlowApp" /Applications/PostureFlow.app/Contents/MacOS/PostureFlowApp
+    chmod 755 /Applications/PostureFlow.app/Contents/MacOS/PostureFlowApp
+    echo -e "${GREEN}  -> Installed /Applications/PostureFlow.app${NC}"
+fi
+
 # 3. Deploy Privileged Helper Daemon
 echo -e "${YELLOW}[3/5] Configuring Privileged Helper Tool & launchd...${NC}"
 mkdir -p /Library/PrivilegedHelperTools

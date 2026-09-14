@@ -43,7 +43,7 @@ jobs:
         run: |
           mkdir -p dist/macos
           cp macos/.build/release/postureflow dist/macos/ 2>/dev/null || true
-          cp macos/.build/release/PostureFlowMenuBar dist/macos/ 2>/dev/null || true
+          cp macos/.build/release/PostureFlowApp dist/macos/ 2>/dev/null || true
           cp macos/.build/release/PostureFlowHelper dist/macos/ 2>/dev/null || true
           cp macos/install.sh dist/macos/
           cp macos/uninstall.sh dist/macos/

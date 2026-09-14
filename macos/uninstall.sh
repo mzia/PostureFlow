@@ -27,9 +27,10 @@ rm -f /Library/PrivilegedHelperTools/io.github.mzia.postureflow.helper
 echo -e "${YELLOW}[2/4] Resetting pfctl firewall rules...${NC}"
 pfctl -a "postureflow/*" -F all 2>/dev/null || true
 
-# 3. Remove CLI binary
-echo -e "${YELLOW}[3/4] Removing CLI binary...${NC}"
+# 3. Remove CLI binary and App
+echo -e "${YELLOW}[3/4] Removing binaries and Application...${NC}"
 rm -f /usr/local/bin/postureflow
+rm -rf /Applications/PostureFlow.app
 
 # 4. Clean Application Support
 echo -e "${YELLOW}[4/4] Removing system state...${NC}"
