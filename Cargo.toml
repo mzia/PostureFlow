@@ -1,6 +1,6 @@
 [package]
 name = "postureflow"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 authors = ["M. Zia"]
 description = "PostureFlow: Context-aware security, developer, and lifestyle posture manager"

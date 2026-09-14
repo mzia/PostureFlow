@@ -16,7 +16,7 @@ use postureflow::profile::Profile;
 #[derive(Parser, Debug)]
 #[command(name = "postureflow-applet")]
 #[command(author = "M. Zia")]
-#[command(version = "1.0.0")]
+#[command(version = "1.0.1")]
 #[command(about = "COSMIC Panel Applet & System Tray for PostureFlow", long_about = None)]
 struct Cli {
     /// Connect to Session Bus instead of System Bus for daemon communication (test mode)
@@ -40,7 +40,7 @@ struct Cli {
 async fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
 
-    println!("[*] Initializing PostureFlow Applet (v1.0.0)...");
+    println!("[*] Initializing PostureFlow Applet (v1.0.1)...");
     let daemon = DaemonClient::connect(cli.session_bus).await?;
 
     if cli.reset {

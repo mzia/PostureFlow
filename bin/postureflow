@@ -24,7 +24,7 @@ log_error()   { echo -e "${RED}[-]${NC} $1"; }
 log_title()   { echo -e "\n${BOLD}${CYAN}=== $1 ===${NC}"; }
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-VERSION="1.0.0"
+VERSION="1.0.1"
 STATE_FILE="/etc/postureflow-state"
 SYSCTL_CONF="/etc/sysctl.d/99-postureflow.conf"
 LIMITS_CONF="/etc/security/limits.d/99-postureflow.conf"

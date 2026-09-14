@@ -17,7 +17,7 @@ echo -e "\n${BOLD}${CYAN}=== Building Debian Package for PostureFlow ===${NC}"
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 
-VERSION="1.0.0"
+VERSION="1.0.1"
 ARCH="amd64"
 PKG_NAME="postureflow"
 DIST_DIR="$REPO_ROOT/dist"

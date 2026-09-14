@@ -8,10 +8,11 @@
 [![OS: macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Ventura%2B-black.svg)](macos/README.md)
 [![Hardware: Framework Laptop](https://img.shields.io/badge/Hardware-Framework%20Laptop-black.svg)](https://frame.work)
 
-> **Dynamic security posture, hardware power, and lifestyle workflow orchestrator for Linux & macOS.**
+> **Autonomous security posture, hardware power, and service orchestrator for Linux, macOS, and Windows.**
 
+**PostureFlow** is an autonomous system orchestrator that manages firewall rules, kernel sysctl parameters, CPU power states, background developer services (Docker containers and systemd units), and peripheral security based on your active environment.
 
-`PostureFlow` dynamically bridges the gap between paranoid security, frictionless software engineering, and casual entertainment. Switch postures with a single command or status bar click without ever risking lockout from your laptop.
+It allows you to switch between predefined or custom profiles (`Home`, `Work`, `Dev`, `Travel`) manually or autonomously based on connected Wi-Fi SSIDs, VPN/mesh tunnels (Tailscale, WireGuard), active applications, or circadian schedules—backed by strict anti-lockout safety guarantees.
 
 ---
 
@@ -21,7 +22,7 @@
 
 Download the latest `.deb` from [GitHub Releases](https://github.com/mzia/PostureFlow/releases) and install:
 ```bash
-sudo dpkg -i dist/postureflow_1.0.0_amd64.deb
+sudo dpkg -i dist/postureflow_1.0.1_amd64.deb
 ```
 
 ### Option 2: Install from Source
@@ -32,7 +33,7 @@ cd PostureFlow
 
 # Build Rust binaries and Debian package
 make deb
-sudo dpkg -i dist/postureflow_1.0.0_amd64.deb
+sudo dpkg -i dist/postureflow_1.0.1_amd64.deb
 
 # Or install directly with the installer script
 sudo ./install.sh
@@ -76,16 +77,17 @@ postureflow --autoflow       # Check autonomous network detection & SSID rules
 
 ---
 
-## 🎯 Why PostureFlow?
+## 🛠️ What PostureFlow Does
 
-Linux security tools (like UFW, firewalld, or raw sysctl) are static. But laptop users live in dynamic contexts:
+PostureFlow coordinates multiple operating system subsystems into unified, context-aware profiles:
 
-* **The Dev Friction Problem:** Strict security (`ptrace_scope = 2`) blocks `gdb`, `lldb`, and VS Code from debugging processes. Default `inotify` limits crash Vite and Webpack. Devs end up turning off security entirely.
-* **The Corporate Leak Risk:** Running a local dev server (`0.0.0.0:3000`) or test database on a corporate office Wi-Fi exposes your code and data to everyone on the subnet.
-* **The Home Entertainment Barrier:** Overly aggressive firewalls break Steam Remote Play, local game downloads, and phone sync (GSConnect/LocalSend).
-* **The Update Drift Problem:** Every `apt upgrade` or kernel bump wipes runtime sysctl tuning and resets UFW configurations.
-
-`PostureFlow` solves all of this with zero dependencies, a native Rust D-Bus daemon, Polkit cached authorization, and built-in anti-lockout guarantees.
+* **Automated Firewall & Port Management:** Dynamically adjusts inbound/outbound rules and isolates network interfaces using UFW (Linux), PF (macOS), or Windows Filtering Platform.
+* **Kernel & Memory Hardening:** Applies `sysctl` security controls (`ptrace_scope`, `bpf_jit_harden`, `inotify.max_user_watches`, core dumps) tailored to each operational context.
+* **Autonomous Network Detection (Auto-Flow):** Monitors network transitions and shifts profiles automatically when connecting to trusted home Wi-Fi, corporate networks, public hotspots, or VPN/mesh tunnels (Tailscale, WireGuard, ZeroTier).
+* **Developer Service Lifecycle:** Automatically pauses Docker containers (`docker pause`) and stops developer background services when leaving dev mode, resuming them upon return.
+* **Application-Aware Dynamic Triggers:** Sub-millisecond process scanner that applies performance or security overrides when specific apps (e.g. IDEs, gaming, video conferencing) start, cleanly reverting on exit.
+* **Hardware & Power Optimization:** Controls CPU Energy Performance Preference (EPP) scaling, Framework laptop battery charge thresholds, Bluetooth radio stealth, and BadUSB hardware lockdown.
+* **Anti-Lockout Invariants:** Enforces kernel safety guarantees so that loopback IPC (`lo`), established SSH connections, and default internet routing can never be blocked.
 
 ---
 

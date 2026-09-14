@@ -45,6 +45,11 @@
   </screenshots>
 
   <releases>
+    <release version="1.0.1" date="2026-09-14">
+      <description>
+        <p>Developer service lifecycle automation (Docker pause/unpause hooks), Tailscale &amp; WireGuard mesh tunnel discovery, granular VPN auto-flow routing, and GUI status badges.</p>
+      </description>
+    </release>
     <release version="1.0.0" date="2026-09-09">
       <description>
         <p>Initial stable release of PostureFlow featuring native COSMIC panel applet, floating desktop GUI, declarative custom profile engine, and factory reset option.</p>

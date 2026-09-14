@@ -13,7 +13,7 @@ use postureflow::schedule;
 #[derive(Parser, Debug)]
 #[command(name = "postureflow-daemon")]
 #[command(author = "M. Zia")]
-#[command(version = "1.0.0")]
+#[command(version = "1.0.1")]
 #[command(about = "PostureFlow Context Posture Manager & D-Bus Daemon", long_about = None)]
 struct Cli {
     /// Run as a background D-Bus service
@@ -285,7 +285,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 async fn run_daemon(session_bus: bool) -> Result<(), Box<dyn Error>> {
-    println!("[*] Starting postureflow-daemon (v1.0.0)...");
+    println!("[*] Starting postureflow-daemon (v1.0.1)...");
     let service = PostureFlowService::new();
 
     let connection = if session_bus {

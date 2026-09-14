@@ -321,7 +321,7 @@ impl eframe::App for GuiApp {
                             .color(Color32::from_rgb(72, 185, 199))
                             .strong(),
                     );
-                    ui.label(RichText::new("v1.0.0").color(Color32::from_rgb(140, 150, 175)).small());
+                    ui.label(RichText::new("v1.0.1").color(Color32::from_rgb(140, 150, 175)).small());
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.button("🔄 Refresh").clicked() {
