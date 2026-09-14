@@ -47,7 +47,7 @@ public final class PowerManager {
                 continue
             }
             
-            let isCurrentPowerSource = desc[kIOPSIsCurrentPowerSourceKey as String] as? Bool ?? false
+            let isCurrentPowerSource = desc["Is Current Power Source"] as? Bool ?? true
             if !isCurrentPowerSource { continue }
 
             let currentCapacity = desc[kIOPSCurrentCapacityKey as String] as? Int ?? 100
