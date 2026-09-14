@@ -32,7 +32,7 @@ final class PostureModelTests: XCTestCase {
             isLowPowerMode: true
         )
         XCTAssertGreaterThanOrEqual(travelScore.score, 85)
-        XCTAssertEqual(travelScore.grade, "A")
+        XCTAssertEqual(travelScore.grade, "A+")
 
         // Inactive firewall penalty test
         let compromisedScore = PostureScore(
