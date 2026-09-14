@@ -54,11 +54,11 @@ final class PostureModelTests: XCTestCase {
         let data = try encoder.encode(config)
 
         let decoder = JSONDecoder()
-        let loaded = try decoder.decode(PostureConfig.self, data: data)
-        XCTAssertEqual(loaded.activeProfile, .work)
+        let loaded = try decoder.decode(PostureConfig.self, from: data)
+        XCTAssertEqual(loaded.activeProfile, PostureMode.work)
         XCTAssertTrue(loaded.autoFlowEnabled)
         XCTAssertTrue(loaded.triggersEnabled)
-        XCTAssertEqual(loaded.appTriggers["us.zoom.xos"], .work)
-        XCTAssertEqual(loaded.appTriggers["com.apple.dt.Xcode"], .dev)
+        XCTAssertEqual(loaded.appTriggers["us.zoom.xos"], PostureMode.work)
+        XCTAssertEqual(loaded.appTriggers["com.apple.dt.Xcode"], PostureMode.dev)
     }
 }
