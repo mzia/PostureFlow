@@ -54,12 +54,13 @@ cd C:\Temp\PostureFlow\windows-x64
 
 ## 🍏 macOS: macOS 15 Sequoia & macOS 14 Sonoma (Apple Silicon & Intel)
 
-* **Package:** `postureflow_1.0.0_macos_universal.tar.gz`
+* **Package:** `postureflow_1.0.0_macos_universal.tar.gz` (240 KB)
 * **Contents:**
-  * SwiftPM multi-target build system
-  * `install.sh` (Automated Privileged Helper & launchd deployment)
-  * `uninstall.sh` (Daemon removal & packet filter anchor flush)
-  * Menu Bar Extra UI & CLI binaries
+  * `postureflow` (Terminal CLI binary)
+  * `PostureFlowApp` (Native SwiftUI MenuBarExtra App binary)
+  * `PostureFlowHelper` (Root Privileged Helper Daemon binary)
+  * `install.sh` (Automated Privileged Helper & launchd deployment script)
+  * `uninstall.sh` (Daemon removal & packet filter anchor flush script)
 
 ### Installation
 ```bash
