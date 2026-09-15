@@ -159,6 +159,37 @@ pub fn validate_and_sanitize(mut config: ProfileConfig) -> Result<ValidationRepo
         config.power.cpu_epp = Some(epp_lower);
     }
 
+    // 10. Validate DNS configuration if present
+    if let Some(ref dot) = config.dns.dns_over_tls {
+        let dot_lower = dot.trim().to_lowercase();
+        if !["yes", "opportunistic", "no"].contains(&dot_lower.as_str()) {
+            return Err(format!(
+                "Invalid dns_over_tls '{}'. Expected 'yes', 'opportunistic', or 'no'.",
+                dot
+            ));
+        }
+        config.dns.dns_over_tls = Some(dot_lower);
+    }
+
+    if let Some(ref sec) = config.dns.dnssec {
+        let sec_lower = sec.trim().to_lowercase();
+        if !["yes", "allow-downgrade", "no"].contains(&sec_lower.as_str()) {
+            return Err(format!(
+                "Invalid dnssec '{}'. Expected 'yes', 'allow-downgrade', or 'no'.",
+                sec
+            ));
+        }
+        config.dns.dnssec = Some(sec_lower);
+    }
+
+    for srv in config.dns.servers.iter_mut().chain(config.dns.fallback_servers.iter_mut()) {
+        let trimmed = srv.trim().to_string();
+        if trimmed.contains('\n') || trimmed.contains('\r') || trimmed.contains('\0') {
+            return Err(format!("Invalid DNS server string '{}': contains control characters", srv));
+        }
+        *srv = trimmed;
+    }
+
     Ok(ValidationReport {
         is_valid: true,
         warnings,
@@ -190,6 +221,7 @@ mod tests {
             peripherals: PeripheralsConfig::default(),
             desktop: DesktopConfig::default(),
             hooks: HooksConfig::default(),
+            dns: DnsConfig::default(),
         }
     }
 
@@ -270,5 +302,20 @@ mod tests {
         cfg.power.cpu_epp = Some("invalid_mode".to_string());
         let res_err = validate_and_sanitize(cfg);
         assert!(res_err.is_err());
+    }
+
+    #[test]
+    fn test_dns_validation() {
+        let mut cfg = sample_config();
+        cfg.dns.dns_over_tls = Some("yes".to_string());
+        cfg.dns.dnssec = Some("yes".to_string());
+        cfg.dns.servers = vec!["9.9.9.9#dns.quad9.net".to_string()];
+        cfg.dns.domains = vec!["~.".to_string()];
+
+        let res = validate_and_sanitize(cfg.clone());
+        assert!(res.is_ok());
+
+        cfg.dns.dns_over_tls = Some("bogus".to_string());
+        assert!(validate_and_sanitize(cfg).is_err());
     }
 }
