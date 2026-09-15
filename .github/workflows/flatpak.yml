@@ -37,16 +37,13 @@ jobs:
     name: Build Flatpak Bundle
     needs: flatpak-verify
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/flathub-infra/flatpak-builder-lint:latest
-      options: --privileged
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Flatpak Builder
-        uses: flatpak/flatpak-builder-action@v1
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: io.github.mzia.PostureFlow.flatpak
           manifest-path: io.github.mzia.PostureFlow.yml

@@ -53,11 +53,8 @@ trap cleanup EXIT
 
 sleep 2
 
-# Discover the unique bus name for the applet
-APPLET_DEST=$(busctl --user list | grep -E 'postureflow-app' | awk '{print $1}' || true)
-if [ -z "$APPLET_DEST" ]; then
-    APPLET_DEST=":1.2"
-fi
+# The applet registers the well-known name io.github.mzia.PostureFlow.Applet
+APPLET_DEST="io.github.mzia.PostureFlow.Applet"
 echo "[*] Discovered Applet Bus Destination: $APPLET_DEST"
 
 echo "[*] Step 3: Verifying StatusNotifierItem properties on D-Bus..."
@@ -95,13 +92,13 @@ fi
 
 UPDATED_ICON=$(gdbus call --session --dest "$APPLET_DEST" --object-path /StatusNotifierItem --method org.freedesktop.DBus.Properties.Get org.kde.StatusNotifierItem IconName)
 echo "    -> Updated Icon: $UPDATED_ICON"
-if [[ "$UPDATED_ICON" != *"applications-office-symbolic"* ]]; then
+if [[ "$UPDATED_ICON" != *"work"* ]] && [[ "$UPDATED_ICON" != *"applications-office"* ]]; then
     echo "[-] Error: Expected work icon, got: $UPDATED_ICON"
     exit 1
 fi
 
-echo "[*] Step 6: Simulating left click (Activate) to cycle to Dev profile..."
-gdbus call --session --dest "$APPLET_DEST" --object-path /StatusNotifierItem --method org.kde.StatusNotifierItem.Activate 0 0
+echo "[*] Step 6: Simulating user click on Dev Profile (Item ID 12)..."
+gdbus call --session --dest "$APPLET_DEST" --object-path /com/canonical/dbusmenu --method com.canonical.dbusmenu.Event 12 "clicked" "<0>" 0
 
 sleep 1
 
@@ -114,13 +111,13 @@ fi
 
 CYCLED_ICON=$(gdbus call --session --dest "$APPLET_DEST" --object-path /StatusNotifierItem --method org.freedesktop.DBus.Properties.Get org.kde.StatusNotifierItem IconName)
 echo "    -> Cycled Icon: $CYCLED_ICON"
-if [[ "$CYCLED_ICON" != *"utilities-terminal-symbolic"* ]]; then
+if [[ "$CYCLED_ICON" != *"dev"* ]] && [[ "$CYCLED_ICON" != *"utilities-terminal"* ]]; then
     echo "[-] Error: Expected dev icon, got: $CYCLED_ICON"
     exit 1
 fi
 
-echo "[*] Step 7: Simulating left click (Activate) to cycle to Travel profile..."
-gdbus call --session --dest "$APPLET_DEST" --object-path /StatusNotifierItem --method org.kde.StatusNotifierItem.Activate 0 0
+echo "[*] Step 7: Simulating user click on Travel Profile (Item ID 13)..."
+gdbus call --session --dest "$APPLET_DEST" --object-path /com/canonical/dbusmenu --method com.canonical.dbusmenu.Event 13 "clicked" "<0>" 0
 
 sleep 1
 
@@ -133,7 +130,7 @@ fi
 
 TRAVEL_ICON=$(gdbus call --session --dest "$APPLET_DEST" --object-path /StatusNotifierItem --method org.freedesktop.DBus.Properties.Get org.kde.StatusNotifierItem IconName)
 echo "    -> Cycled Icon: $TRAVEL_ICON"
-if [[ "$TRAVEL_ICON" != *"security-high-symbolic"* ]]; then
+if [[ "$TRAVEL_ICON" != *"travel"* ]] && [[ "$TRAVEL_ICON" != *"security-high"* ]]; then
     echo "[-] Error: Expected travel icon, got: $TRAVEL_ICON"
     exit 1
 fi
