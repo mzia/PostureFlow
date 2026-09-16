@@ -9,6 +9,10 @@ PostureFlow for macOS brings the contextual security and power-scaling features 
 ## 🌟 Key Features on macOS
 
 * **SwiftUI `MenuBarExtra`:** Lives natively in the top menu bar status area with dynamic SF Symbols and profile accent colors.
+* **🔑 YubiKey Hardware Presence Tethering ("Zero-Trust Physical Token"):** Continuous USB monitoring detecting token ejection to instantly lock the macOS desktop (`pmset displaysleepnow`), demote to Travel lockdown, and auto-restore on re-insert.
+* **🪤 Honeypot Port Traps & LAN Port Scan Defense:** High-performance `Network.framework` `NWListener` decoy sockets on ports 2222, 8080, and 4450 with autonomous peer IP bans via `pfctl`.
+* **🎙️ Camera, Microphone & Sensor Hardware Privacy Kill Switch:** Programmatic input volume muting, per-profile privacy enforcement, and 1-click Emergency Kill Switch.
+* **🛰️ Bluetooth RSSI Proximity Auto-Lock ("Walk-Away Security"):** CoreBluetooth BLE signal tracking to iPhone or Apple Watch, locking the Mac when stepping away beyond the threshold.
 * **Apple Silicon Power Optimization:** Programmatic control over macOS Low Power Mode (`pmset lowpowermode`) and display sleep timers (`pmset displaysleep`), ensuring maximum battery life during Travel and zero stutter during Work video calls.
 * **Packet Filter (`pfctl`) Anchoring:** Isolated perimeter firewall rules placed at `/etc/pf.anchors/com.postureflow`, leaving the system `/etc/pf.conf` intact.
 * **Zero-Overhead Auto-Flow:** Network interface transitions and SSID detection using `CoreWLAN` and `NWPathMonitor` with zero polling.

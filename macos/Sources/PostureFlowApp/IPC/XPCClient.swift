@@ -101,4 +101,76 @@ public final class XPCClient: @unchecked Sendable {
             }
         }
     }
+
+    /// Blocks a malicious peer IP via Packet Filter
+    public func blockOffenderIP(ip: String) async throws -> Bool {
+        let conn = getOrCreateConnection()
+        return try await withCheckedThrowingContinuation { continuation in
+            let helper = conn.remoteObjectProxyWithErrorHandler { error in
+                continuation.resume(throwing: error)
+            } as? PostureFlowHelperProtocol
+
+            helper?.blockOffenderIP(ip: ip) { success, error in
+                if let err = error {
+                    continuation.resume(throwing: NSError(domain: "PostureFlow", code: -1, userInfo: [NSLocalizedDescriptionKey: err]))
+                } else {
+                    continuation.resume(returning: success)
+                }
+            }
+        }
+    }
+
+    /// Engages emergency sensor privacy kill switch
+    public func emergencyKillSensors() async throws -> Bool {
+        let conn = getOrCreateConnection()
+        return try await withCheckedThrowingContinuation { continuation in
+            let helper = conn.remoteObjectProxyWithErrorHandler { error in
+                continuation.resume(throwing: error)
+            } as? PostureFlowHelperProtocol
+
+            helper?.emergencyKillSensors { success, error in
+                if let err = error {
+                    continuation.resume(throwing: NSError(domain: "PostureFlow", code: -1, userInfo: [NSLocalizedDescriptionKey: err]))
+                } else {
+                    continuation.resume(returning: success)
+                }
+            }
+        }
+    }
+
+    /// Restores audio and sensor privacy settings
+    public func restoreSensors() async throws -> Bool {
+        let conn = getOrCreateConnection()
+        return try await withCheckedThrowingContinuation { continuation in
+            let helper = conn.remoteObjectProxyWithErrorHandler { error in
+                continuation.resume(throwing: error)
+            } as? PostureFlowHelperProtocol
+
+            helper?.restoreSensors { success, error in
+                if let err = error {
+                    continuation.resume(throwing: NSError(domain: "PostureFlow", code: -1, userInfo: [NSLocalizedDescriptionKey: err]))
+                } else {
+                    continuation.resume(returning: success)
+                }
+            }
+        }
+    }
+
+    /// Immediately locks the desktop session
+    public func lockScreen() async throws -> Bool {
+        let conn = getOrCreateConnection()
+        return try await withCheckedThrowingContinuation { continuation in
+            let helper = conn.remoteObjectProxyWithErrorHandler { error in
+                continuation.resume(throwing: error)
+            } as? PostureFlowHelperProtocol
+
+            helper?.lockScreen { success, error in
+                if let err = error {
+                    continuation.resume(throwing: NSError(domain: "PostureFlow", code: -1, userInfo: [NSLocalizedDescriptionKey: err]))
+                } else {
+                    continuation.resume(returning: success)
+                }
+            }
+        }
+    }
 }

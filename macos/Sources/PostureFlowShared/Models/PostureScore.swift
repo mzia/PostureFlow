@@ -13,7 +13,11 @@ public struct PostureScore: Codable, Sendable {
         isStealthModeActive: Bool,
         isVPNActive: Bool,
         openPortCount: Int,
-        isLowPowerMode: Bool
+        isLowPowerMode: Bool,
+        isHardwareTetherActive: Bool = false,
+        isHoneypotActive: Bool = false,
+        isSensorPrivacyActive: Bool = false,
+        isProximityLockActive: Bool = false
     ) {
         var calculatedScore = 0
         var items: [String: Int] = [:]
@@ -67,6 +71,24 @@ public struct PostureScore: Codable, Sendable {
             items["Dev Ports Open (Permitted)"] = 5
         } else if openPortCount > 5 {
             recs.append("Detected \(openPortCount) listening network sockets. Close unused servers.")
+        }
+
+        // 6. Zero-Trust Hardware Defense & Physical Tokens
+        if isHardwareTetherActive {
+            calculatedScore += 5
+            items["YubiKey Hardware Tether Active"] = 5
+        }
+        if isHoneypotActive {
+            calculatedScore += 5
+            items["Decoy Honeypot Traps Armed"] = 5
+        }
+        if isSensorPrivacyActive {
+            calculatedScore += 5
+            items["Sensor Hardware Privacy Locked"] = 5
+        }
+        if isProximityLockActive {
+            calculatedScore += 5
+            items["Walk-Away Proximity Auto-Lock"] = 5
         }
 
         let finalScore = max(0, min(100, calculatedScore))

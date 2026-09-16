@@ -109,4 +109,37 @@ public final class HelperService: NSObject, PostureFlowHelperProtocol, NSXPCList
         _ = powerManager.setDisplaySleep(minutes: 15)
         reply(result.success, result.error)
     }
+
+    public func blockOffenderIP(ip: String, with reply: @escaping (Bool, String?) -> Void) {
+        NSLog("[PostureFlowHelper] Blocking malicious peer IP: %@", ip)
+        let result = packetFilter.blockIP(ip)
+        reply(result.success, result.error)
+    }
+
+    public func emergencyKillSensors(with reply: @escaping (Bool, String?) -> Void) {
+        NSLog("[PostureFlowHelper] Engaging emergency sensor privacy kill switch")
+        let success = SensorPrivacyController.emergencyKillAllSensors()
+        reply(success, success ? nil : "Failed to engage emergency sensor kill switch")
+    }
+
+    public func restoreSensors(with reply: @escaping (Bool, String?) -> Void) {
+        NSLog("[PostureFlowHelper] Restoring sensor privacy settings")
+        let success = SensorPrivacyController.restoreAllSensors()
+        reply(success, success ? nil : "Failed to restore sensors")
+    }
+
+    public func lockScreen(with reply: @escaping (Bool, String?) -> Void) {
+        NSLog("[PostureFlowHelper] Locking macOS desktop session")
+        // Invoke CGSession suspend or pmset displaysleepnow
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
+        process.arguments = ["displaysleepnow"]
+        do {
+            try process.run()
+            process.waitUntilExit()
+            reply(process.terminationStatus == 0, nil)
+        } catch {
+            reply(false, error.localizedDescription)
+        }
+    }
 }
