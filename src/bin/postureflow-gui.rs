@@ -7,6 +7,7 @@ use postureflow::config::{
 use postureflow::inspector::{self, ListeningPort, PostureScoreReport};
 use postureflow::triggers::{self, TriggerRule, TriggersConfig};
 use postureflow::schedule::{self, CircadianConfig, ScheduleWindow};
+use postureflow::hardware;
 use postureflow::system;
 use std::collections::HashMap;
 
@@ -14,6 +15,7 @@ use std::collections::HashMap;
 enum MainTab {
     Cockpit,
     Ports,
+    Hardware,
     AutoFlow,
     Triggers,
     Schedule,
@@ -81,6 +83,13 @@ struct GuiApp {
     new_dns_server: String,
     new_dns_fallback: String,
     new_dns_domain: String,
+
+    // Hardware Defenses & Sensor Privacy state
+    hw_config: hardware::HardwareDefenseConfig,
+    yubikey_devices: Vec<hardware::yubikey::YubikeyDevice>,
+    honeypot_incidents: Vec<hardware::honeypot::HoneypotIncident>,
+    paired_bt_devices: Vec<(String, String)>,
+    new_trap_port_str: String,
 }
 
 impl GuiApp {
@@ -97,6 +106,8 @@ impl GuiApp {
         if args.iter().any(|a| a == "--tab" || a == "-t") {
             if args.iter().any(|a| a == "ports" || a == "inspector") {
                 initial_tab = MainTab::Ports;
+            } else if args.iter().any(|a| a == "hardware" || a == "tether" || a == "honeypot") {
+                initial_tab = MainTab::Hardware;
             } else if args.iter().any(|a| a == "autoflow") {
                 initial_tab = MainTab::AutoFlow;
             } else if args.iter().any(|a| a == "triggers") {
@@ -147,6 +158,11 @@ impl GuiApp {
             new_dns_server: String::new(),
             new_dns_fallback: String::new(),
             new_dns_domain: String::new(),
+            hw_config: hardware::load_hardware_config(),
+            yubikey_devices: hardware::yubikey::detect_yubikeys(),
+            honeypot_incidents: hardware::honeypot::load_recent_incidents(),
+            paired_bt_devices: hardware::proximity::list_paired_bluetooth_devices(),
+            new_trap_port_str: "2222".to_string(),
         }
     }
 
@@ -159,6 +175,10 @@ impl GuiApp {
         self.active_network = autoflow::detect_active_networks();
         self.triggers_config = triggers::load_triggers_config();
         self.schedule_config = schedule::load_schedule_config();
+        self.hw_config = hardware::load_hardware_config();
+        self.yubikey_devices = hardware::yubikey::detect_yubikeys();
+        self.honeypot_incidents = hardware::honeypot::load_recent_incidents();
+        self.paired_bt_devices = hardware::proximity::list_paired_bluetooth_devices();
         if self.selected_index >= self.profiles.len() {
             self.selected_index = 0;
         }
@@ -366,6 +386,7 @@ impl eframe::App for GuiApp {
                     ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
                     ui.selectable_value(&mut self.main_tab, MainTab::Cockpit, "🛡️ Security Cockpit");
                     ui.selectable_value(&mut self.main_tab, MainTab::Ports, "🔌 Port Inspector");
+                    ui.selectable_value(&mut self.main_tab, MainTab::Hardware, "🔐 Hardware & Traps");
                     ui.selectable_value(&mut self.main_tab, MainTab::AutoFlow, "⚡ Auto-Flow (Network)");
                     ui.selectable_value(&mut self.main_tab, MainTab::Triggers, "🎮 App Triggers");
                     ui.selectable_value(&mut self.main_tab, MainTab::Schedule, "🕒 Schedule & Battery");
@@ -413,6 +434,7 @@ impl eframe::App for GuiApp {
         egui::CentralPanel::default().show(ui, |ui| match self.main_tab {
             MainTab::Cockpit => self.render_cockpit_view(ui),
             MainTab::Ports => self.render_ports_view(ui),
+            MainTab::Hardware => self.render_hardware_view(ui),
             MainTab::AutoFlow => self.render_autoflow_view(ui),
             MainTab::Triggers => self.render_triggers_view(ui),
             MainTab::Schedule => self.render_schedule_view(ui),
@@ -599,6 +621,99 @@ impl GuiApp {
                 }
             });
 
+            ui.add_space(8.0);
+
+            // Hardware & Sensor Privacy Card
+            let sensor_rep = hardware::sensors::get_sensor_privacy_report();
+            ui.group(|ui| {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("🎙️ Hardware & Sensor Privacy:").strong());
+
+                    // Camera Toggle
+                    if sensor_rep.camera_blocked {
+                        if ui.button(RichText::new("📷 Camera: BLOCKED").color(Color32::from_rgb(80, 250, 123)).strong()).clicked() {
+                            let _ = system::apply_camera_blocked(false);
+                            self.refresh_all();
+                        }
+                    } else {
+                        if ui.button(RichText::new("📷 Camera: ACTIVE").color(Color32::from_rgb(255, 85, 85))).clicked() {
+                            let _ = system::apply_camera_blocked(true);
+                            self.refresh_all();
+                        }
+                    }
+
+                    // Mic Toggle
+                    if sensor_rep.microphone_muted {
+                        if ui.button(RichText::new("🎙️ Mic: MUTED").color(Color32::from_rgb(80, 250, 123)).strong()).clicked() {
+                            let _ = system::apply_microphone_muted(false);
+                            self.refresh_all();
+                        }
+                    } else {
+                        if ui.button(RichText::new("🎙️ Mic: ACTIVE").color(Color32::from_rgb(255, 85, 85))).clicked() {
+                            let _ = system::apply_microphone_muted(true);
+                            self.refresh_all();
+                        }
+                    }
+
+                    // Location Toggle
+                    if sensor_rep.location_blocked {
+                        if ui.button(RichText::new("📍 Location: BLOCKED").color(Color32::from_rgb(80, 250, 123)).strong()).clicked() {
+                            let _ = system::apply_location_blocked(false);
+                            self.refresh_all();
+                        }
+                    } else {
+                        if ui.button(RichText::new("📍 Location: ACTIVE").color(Color32::from_rgb(246, 166, 35))).clicked() {
+                            let _ = system::apply_location_blocked(true);
+                            self.refresh_all();
+                        }
+                    }
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button(RichText::new("🚨 Emergency Kill Switch").color(Color32::from_rgb(255, 85, 85)).strong()).clicked() {
+                            let _ = hardware::sensors::emergency_kill_all_sensors();
+                            self.status_message = Some(("Emergency Sensor Kill Switch engaged!".to_string(), false));
+                            self.refresh_all();
+                        }
+                    });
+                });
+            });
+
+            ui.add_space(8.0);
+
+            // Row for YubiKey Tether & Honeypot Status Cards
+            ui.columns(2, |cols| {
+                cols[0].group(|ui| {
+                    ui.label(RichText::new("🔑 YubiKey Physical Tether").strong());
+                    if self.hw_config.yubikey.enabled {
+                        ui.label(RichText::new("Status: ARMED & ENFORCED").color(Color32::from_rgb(80, 250, 123)).small());
+                    } else {
+                        ui.label(RichText::new("Status: Standby (Unarmed)").color(Color32::from_rgb(160, 170, 195)).small());
+                    }
+                    if !self.yubikey_devices.is_empty() {
+                        let k = &self.yubikey_devices[0];
+                        ui.label(RichText::new(format!("Token: {} (SN: {})", k.product_name, k.serial.as_deref().unwrap_or("Attached"))).small());
+                    } else {
+                        ui.label(RichText::new("No YubiKey detected on USB bus").small().color(Color32::from_rgb(246, 166, 35)));
+                    }
+                    if ui.button("Configure Hardware Tether ➔").clicked() {
+                        self.main_tab = MainTab::Hardware;
+                    }
+                });
+
+                cols[1].group(|ui| {
+                    ui.label(RichText::new("🪤 Decoy Honeypot Traps").strong());
+                    if self.hw_config.honeypot.enabled {
+                        ui.label(RichText::new(format!("Status: ACTIVE ({} trap ports)", self.hw_config.honeypot.trap_ports.len())).color(Color32::from_rgb(80, 250, 123)).small());
+                    } else {
+                        ui.label(RichText::new("Status: Inactive").color(Color32::from_rgb(160, 170, 195)).small());
+                    }
+                    ui.label(RichText::new(format!("Intrusion Incidents Logged: {}", self.honeypot_incidents.len())).small());
+                    if ui.button("View Honeypot & Incidents ➔").clicked() {
+                        self.main_tab = MainTab::Hardware;
+                    }
+                });
+            });
+
             ui.add_space(16.0);
 
             // Actionable Recommendations Card
@@ -752,6 +867,262 @@ impl GuiApp {
         if let Some((p, proto, comment)) = whitelist_target {
             self.whitelist_port_in_active_profile(p, &proto, &comment);
         }
+    }
+
+    // 2.5 HARDWARE DEFENSES & TOKEN TETHERING VIEW
+    fn render_hardware_view(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            ui.vertical(|ui| {
+                ui.heading("🔐 Hardware Defenses, Physical Tokens & Traps");
+                ui.label(
+                    RichText::new(
+                        "Zero-Trust YubiKey physical presence tethering, decoy honeypot trap ports, and Bluetooth RSSI walk-away distance security.",
+                    )
+                    .color(Color32::from_rgb(160, 170, 195)),
+                );
+            });
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button(RichText::new("💾 Save Hardware Config").color(Color32::BLACK).strong()).clicked() {
+                    match hardware::save_hardware_config(&self.hw_config, system::is_privileged()) {
+                        Ok(()) => self.status_message = Some(("Hardware defense configuration saved successfully.".to_string(), false)),
+                        Err(e) => self.status_message = Some((format!("Failed to save hardware config: {}", e), true)),
+                    }
+                }
+            });
+        });
+
+        ui.add_space(12.0);
+
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            // SECTION 1: YubiKey Physical Token Tethering
+            egui::Frame::new()
+                .fill(Color32::from_rgb(30, 33, 44))
+                .stroke(Stroke::new(1.0, Color32::from_rgb(48, 54, 72)))
+                .corner_radius(CornerRadius::same(10))
+                .inner_margin(16)
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.heading("🔑 YubiKey Hardware Presence Tethering");
+                        if self.hw_config.yubikey.enabled {
+                            ui.label(RichText::new("[ARMED & ENFORCED]").color(Color32::from_rgb(80, 250, 123)).strong());
+                        } else {
+                            ui.label(RichText::new("[DISABLED]").color(Color32::from_rgb(160, 170, 195)).small());
+                        }
+                    });
+
+                    ui.label(
+                        RichText::new(
+                            "Continuously watches for your physical security token. Unplugging the token instantly locks your screen and demotes PostureFlow to lockdown posture.",
+                        )
+                        .small()
+                        .color(Color32::from_rgb(160, 170, 195)),
+                    );
+
+                    ui.add_space(8.0);
+                    ui.checkbox(&mut self.hw_config.yubikey.enabled, "Enable Hardware Token Presence Tether");
+                    ui.checkbox(&mut self.hw_config.yubikey.lock_session_on_removal, "Lock Desktop Session Immediately Upon Unplugging");
+
+                    ui.horizontal(|ui| {
+                        ui.label("Emergency Fallback Posture:");
+                        egui::ComboBox::from_id_salt("yubikey_fallback_combo")
+                            .selected_text(self.hw_config.yubikey.fallback_profile.to_uppercase())
+                            .show_ui(ui, |ui| {
+                                for p in &self.profiles {
+                                    ui.selectable_value(&mut self.hw_config.yubikey.fallback_profile, p.profile.id.clone(), p.profile.name.clone());
+                                }
+                            });
+                    });
+
+                    ui.checkbox(&mut self.hw_config.yubikey.restore_profile_on_insert, "Restore Profile Automatically When Plugged Back In");
+                    ui.horizontal(|ui| {
+                        ui.label("Restore Profile Target:");
+                        egui::ComboBox::from_id_salt("yubikey_restore_combo")
+                            .selected_text(self.hw_config.yubikey.preferred_profile.to_uppercase())
+                            .show_ui(ui, |ui| {
+                                for p in &self.profiles {
+                                    ui.selectable_value(&mut self.hw_config.yubikey.preferred_profile, p.profile.id.clone(), p.profile.name.clone());
+                                }
+                            });
+                    });
+
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.label(RichText::new("Discovered YubiKey Tokens on USB Bus:").strong());
+                    if self.yubikey_devices.is_empty() {
+                        ui.label(RichText::new("No YubiKey detected. Plug in your YubiKey C Bio to bind.").color(Color32::from_rgb(246, 166, 35)).small());
+                    } else {
+                        for (i, dev) in self.yubikey_devices.iter().enumerate() {
+                            ui.horizontal(|ui| {
+                                ui.label(format!("• [{}] {}", i + 1, dev.product_name));
+                                ui.label(RichText::new(format!("(USB {}:{})", dev.vendor_id, dev.product_id)).small());
+                                if let Some(ref s) = dev.serial {
+                                    ui.label(RichText::new(format!("Serial: {}", s)).small().color(Color32::from_rgb(72, 185, 199)));
+                                }
+                            });
+                        }
+                    }
+                });
+
+            ui.add_space(16.0);
+
+            // SECTION 2: Decoy Honeypot Port Traps
+            egui::Frame::new()
+                .fill(Color32::from_rgb(30, 33, 44))
+                .stroke(Stroke::new(1.0, Color32::from_rgb(48, 54, 72)))
+                .corner_radius(CornerRadius::same(10))
+                .inner_margin(16)
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.heading("🪤 Decoy Honeypot Port Traps & LAN Defense");
+                        if self.hw_config.honeypot.enabled {
+                            ui.label(RichText::new("[ACTIVE DECOYS]").color(Color32::from_rgb(80, 250, 123)).strong());
+                        } else {
+                            ui.label(RichText::new("[INACTIVE]").color(Color32::from_rgb(160, 170, 195)).small());
+                        }
+                    });
+
+                    ui.label(
+                        RichText::new(
+                            "Opens silent decoy TCP listeners. If another host on public Wi-Fi or LAN probes your laptop, PostureFlow instantly bans their IP.",
+                        )
+                        .small()
+                        .color(Color32::from_rgb(160, 170, 195)),
+                    );
+
+                    ui.add_space(8.0);
+                    ui.checkbox(&mut self.hw_config.honeypot.enabled, "Enable Decoy Port Traps");
+                    ui.checkbox(&mut self.hw_config.honeypot.auto_block_offender, "Automatically Ban Attacker IP via UFW Firewall");
+                    ui.checkbox(&mut self.hw_config.honeypot.notify_on_intrusion, "Send Desktop Notifications Upon Intrusion");
+
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.label(RichText::new("Configured Decoy Trap Ports:").strong());
+
+                    let mut remove_port = None;
+                    for (idx, port) in self.hw_config.honeypot.trap_ports.iter().enumerate() {
+                        ui.horizontal(|ui| {
+                            let hint = match *port {
+                                2222 => "(Decoy SSH)",
+                                8080 => "(Decoy HTTP Admin)",
+                                4450 => "(Decoy SMB Share)",
+                                _ => "(Decoy Trap)",
+                            };
+                            ui.label(format!("• TCP Port {} {}", port, hint));
+                            if ui.button("🗑").clicked() {
+                                remove_port = Some(idx);
+                            }
+                        });
+                    }
+                    if let Some(idx) = remove_port {
+                        self.hw_config.honeypot.trap_ports.remove(idx);
+                    }
+
+                    ui.horizontal(|ui| {
+                        ui.add(egui::TextEdit::singleline(&mut self.new_trap_port_str).hint_text("Port e.g. 3389").desired_width(100.0));
+                        if ui.button("➕ Add Decoy Port").clicked() {
+                            if let Ok(p) = self.new_trap_port_str.trim().parse::<u16>() {
+                                if !self.hw_config.honeypot.trap_ports.contains(&p) {
+                                    self.hw_config.honeypot.trap_ports.push(p);
+                                }
+                            }
+                        }
+                    });
+
+                    ui.add_space(12.0);
+                    ui.separator();
+                    ui.label(RichText::new("Recent Intrusion Incidents:").strong());
+                    if self.honeypot_incidents.is_empty() {
+                        ui.label(RichText::new("✓ No unauthorized network probes detected.").small().color(Color32::from_rgb(80, 250, 123)));
+                    } else {
+                        for inc in self.honeypot_incidents.iter().rev().take(10) {
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new("⚠️").color(Color32::from_rgb(255, 85, 85)));
+                                ui.label(RichText::new(&inc.source_ip).strong());
+                                ui.label(format!("targeted TCP {}", inc.trap_port));
+                                if inc.blocked {
+                                    ui.label(RichText::new("[UFW BANNED]").color(Color32::from_rgb(80, 250, 123)).small());
+                                } else {
+                                    ui.label(RichText::new("[LOGGED]").small().color(Color32::from_rgb(246, 166, 35)));
+                                }
+                            });
+                        }
+                    }
+                });
+
+            ui.add_space(16.0);
+
+            // SECTION 3: Bluetooth RSSI Walk-Away Proximity Auto-Lock
+            egui::Frame::new()
+                .fill(Color32::from_rgb(30, 33, 44))
+                .stroke(Stroke::new(1.0, Color32::from_rgb(48, 54, 72)))
+                .corner_radius(CornerRadius::same(10))
+                .inner_margin(16)
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.heading("🛰️ Bluetooth RSSI Proximity Auto-Lock");
+                        if self.hw_config.proximity.enabled {
+                            ui.label(RichText::new("[ARMED]").color(Color32::from_rgb(80, 250, 123)).strong());
+                        } else {
+                            ui.label(RichText::new("[DISABLED]").color(Color32::from_rgb(160, 170, 195)).small());
+                        }
+                    });
+
+                    ui.label(
+                        RichText::new(
+                            "Walk-Away Security: pairs with your smartphone or smartwatch via BLE. When you walk away and signal drops, your laptop automatically locks.",
+                        )
+                        .small()
+                        .color(Color32::from_rgb(160, 170, 195)),
+                    );
+
+                    ui.add_space(8.0);
+                    ui.checkbox(&mut self.hw_config.proximity.enabled, "Enable Bluetooth Walk-Away Auto-Lock");
+
+                    ui.horizontal(|ui| {
+                        ui.label("Paired Device Target:");
+                        let target_display = match (&self.hw_config.proximity.target_device_mac, &self.hw_config.proximity.target_device_name) {
+                            (Some(mac), Some(name)) => format!("{} ({})", name, mac),
+                            (Some(mac), None) => mac.clone(),
+                            _ => "Select Paired Device...".to_string(),
+                        };
+
+                        egui::ComboBox::from_id_salt("bt_device_select")
+                            .selected_text(target_display)
+                            .show_ui(ui, |ui| {
+                                for (mac, name) in &self.paired_bt_devices {
+                                    if ui.selectable_label(self.hw_config.proximity.target_device_mac.as_deref() == Some(mac), format!("{} ({})", name, mac)).clicked() {
+                                        self.hw_config.proximity.target_device_mac = Some(mac.clone());
+                                        self.hw_config.proximity.target_device_name = Some(name.clone());
+                                    }
+                                }
+                            });
+                    });
+
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        ui.label("Lock Distance RSSI Threshold:");
+                        ui.add(egui::Slider::new(&mut self.hw_config.proximity.rssi_lock_threshold, -100..=-50).suffix(" dBm"));
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Walk-Away Grace Period:");
+                        ui.add(egui::Slider::new(&mut self.hw_config.proximity.grace_period_seconds, 2..=30).suffix(" seconds"));
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Lock Posture Target:");
+                        egui::ComboBox::from_id_salt("bt_lock_profile_combo")
+                            .selected_text(self.hw_config.proximity.lock_profile.to_uppercase())
+                            .show_ui(ui, |ui| {
+                                for p in &self.profiles {
+                                    ui.selectable_value(&mut self.hw_config.proximity.lock_profile, p.profile.id.clone(), p.profile.name.clone());
+                                }
+                            });
+                    });
+                });
+        });
     }
 
     // 3. AUTO-FLOW (NETWORK DETECTION) VIEW
@@ -1885,6 +2256,21 @@ impl GuiApp {
                     let mut bt = current_profile.peripherals.bluetooth.unwrap_or(true);
                     if ui.add_enabled(!is_builtin, egui::Checkbox::new(&mut bt, "📶 Bluetooth Radio Enabled")).changed() {
                         current_profile.peripherals.bluetooth = Some(bt);
+                    }
+
+                    let mut cam_b = current_profile.peripherals.camera_blocked.unwrap_or(false);
+                    if ui.add_enabled(!is_builtin, egui::Checkbox::new(&mut cam_b, "📷 Block Camera Hardware (Webcam driver lockout)")).changed() {
+                        current_profile.peripherals.camera_blocked = Some(cam_b);
+                    }
+
+                    let mut mic_m = current_profile.peripherals.microphone_muted.unwrap_or(false);
+                    if ui.add_enabled(!is_builtin, egui::Checkbox::new(&mut mic_m, "🎙️ Mute Microphone Hardware (PipeWire/ALSA lock)")).changed() {
+                        current_profile.peripherals.microphone_muted = Some(mic_m);
+                    }
+
+                    let mut loc_b = current_profile.peripherals.location_blocked.unwrap_or(false);
+                    if ui.add_enabled(!is_builtin, egui::Checkbox::new(&mut loc_b, "📍 Isolate Location / Geolocation (Stop geoclue)")).changed() {
+                        current_profile.peripherals.location_blocked = Some(loc_b);
                     }
                 }
 

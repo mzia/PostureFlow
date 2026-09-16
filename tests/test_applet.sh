@@ -30,6 +30,8 @@ DAEMON="./target/release/postureflow-daemon"
 APPLET="./target/release/postureflow-applet"
 
 TEST_STATE=$(mktemp)
+TEST_HOME=$(mktemp -d)
+export HOME="$TEST_HOME"
 export POSTUREFLOW_STATE_FILE="$TEST_STATE"
 export POP_PROFILE_STATE_FILE="$TEST_STATE"
 
@@ -48,6 +50,7 @@ cleanup() {
     kill $APPLET_PID 2>/dev/null || true
     kill $DAEMON_PID 2>/dev/null || true
     rm -f "$TEST_STATE"
+    rm -rf "$TEST_HOME"
 }
 trap cleanup EXIT
 
@@ -75,8 +78,10 @@ if [[ "$LAYOUT" != *"Configure Profiles"* ]]; then
     exit 1
 fi
 
-# Temporarily disable Auto-Flow during manual cycling tests
+# Temporarily disable Auto-Flow, Triggers, and Schedule during manual cycling tests
 gdbus call --session --dest io.github.mzia.PostureFlow --object-path /io/github/mzia/PostureFlow --method io.github.mzia.PostureFlow.SetAutoFlowEnabled false >/dev/null
+gdbus call --session --dest io.github.mzia.PostureFlow --object-path /io/github/mzia/PostureFlow --method io.github.mzia.PostureFlow.SetTriggersEnabled false >/dev/null
+gdbus call --session --dest io.github.mzia.PostureFlow --object-path /io/github/mzia/PostureFlow --method io.github.mzia.PostureFlow.SetScheduleEnabled false >/dev/null
 
 echo "[*] Step 5: Simulating user click on Work Profile (Item ID 11)..."
 gdbus call --session --dest "$APPLET_DEST" --object-path /com/canonical/dbusmenu --method com.canonical.dbusmenu.Event 11 "clicked" "<0>" 0

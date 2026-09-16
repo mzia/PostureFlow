@@ -298,6 +298,88 @@ impl PostureFlowService {
         Ok(())
     }
 
+    /// Toggles Circadian Schedule master switch: requires Polkit authorization
+    async fn set_schedule_enabled(
+        &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+        enabled: bool,
+    ) -> fdo::Result<()> {
+        check_posture_auth(conn, hdr.sender()).await?;
+        let mut cfg = crate::schedule::load_schedule_config();
+        cfg.enabled = enabled;
+        crate::schedule::save_schedule_config(&cfg)
+            .map_err(|e| fdo::Error::Failed(e))?;
+        Ok(())
+    }
+
+    /// Toggles Dynamic App Triggers master switch: requires Polkit authorization
+    async fn set_triggers_enabled(
+        &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+        enabled: bool,
+    ) -> fdo::Result<()> {
+        check_posture_auth(conn, hdr.sender()).await?;
+        let mut cfg = crate::triggers::load_triggers_config();
+        cfg.enabled = enabled;
+        crate::triggers::save_triggers_config(&cfg)
+            .map_err(|e| fdo::Error::Failed(e))?;
+        Ok(())
+    }
+
+    /// Returns current Hardware Defense configuration TOML string
+    async fn get_hardware_defense_config(&self) -> fdo::Result<String> {
+        let cfg = crate::hardware::load_hardware_config();
+        cfg.to_toml()
+            .map_err(|e| fdo::Error::Failed(format!("TOML serialize error: {}", e)))
+    }
+
+    /// Updates Hardware Defense configuration: requires Polkit authorization
+    async fn save_hardware_defense_config(
+        &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+        toml_str: String,
+    ) -> fdo::Result<()> {
+        check_posture_auth(conn, hdr.sender()).await?;
+        let cfg: crate::hardware::HardwareDefenseConfig = crate::hardware::HardwareDefenseConfig::from_toml(&toml_str)
+            .map_err(|e| fdo::Error::InvalidArgs(format!("Invalid TOML syntax: {}", e)))?;
+        let is_system = system::is_privileged();
+        crate::hardware::save_hardware_config(&cfg, is_system)
+            .map_err(|e| fdo::Error::Failed(e))?;
+        Ok(())
+    }
+
+    /// Emergency Kill Switch: immediately cuts camera driver, mutes microphone, disables location
+    async fn emergency_kill_sensors(
+        &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+    ) -> fdo::Result<()> {
+        check_posture_auth(conn, hdr.sender()).await?;
+        crate::hardware::sensors::emergency_kill_all_sensors()
+            .map_err(|e| fdo::Error::Failed(e))
+    }
+
+    /// Restores camera, microphone, and geolocation sensors
+    async fn restore_sensors(
+        &self,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] hdr: zbus::message::Header<'_>,
+    ) -> fdo::Result<()> {
+        check_posture_auth(conn, hdr.sender()).await?;
+        crate::hardware::sensors::restore_all_sensors()
+            .map_err(|e| fdo::Error::Failed(e))
+    }
+
+    /// Returns live sensor privacy report as JSON
+    async fn get_sensor_privacy_report(&self) -> fdo::Result<String> {
+        let rep = crate::hardware::sensors::get_sensor_privacy_report();
+        serde_json::to_string(&rep)
+            .map_err(|e| fdo::Error::Failed(format!("JSON serialization error: {}", e)))
+    }
+
     /// D-Bus Signal emitted whenever the profile changes
     #[zbus(signal)]
     async fn profile_changed(ctxt: &zbus::SignalContext<'_>, new_profile: &str) -> zbus::Result<()>;

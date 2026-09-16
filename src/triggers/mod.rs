@@ -138,16 +138,43 @@ pub fn load_triggers_config() -> TriggersConfig {
     default_triggers_config()
 }
 
-pub fn save_triggers_config(config: &TriggersConfig) -> Result<PathBuf, String> {
-    let target = triggers_config_path();
-    if let Some(parent) = target.parent() {
-        let _ = fs::create_dir_all(parent);
+pub fn user_triggers_config_path() -> PathBuf {
+    if let Ok(cfg_home) = std::env::var("XDG_CONFIG_HOME") {
+        PathBuf::from(cfg_home).join("postureflow/triggers.toml")
+    } else {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        PathBuf::from(home).join(".config/postureflow/triggers.toml")
     }
+}
+
+pub fn save_triggers_config(config: &TriggersConfig) -> Result<PathBuf, String> {
     let serialized = toml::to_string_pretty(config)
         .map_err(|e| format!("Failed to serialize triggers config: {}", e))?;
-    fs::write(&target, serialized)
-        .map_err(|e| format!("Failed to write triggers config to {}: {}", target.display(), e))?;
-    Ok(target)
+
+    if let Ok(p) = std::env::var("POSTUREFLOW_TRIGGERS_FILE") {
+        let target = PathBuf::from(p);
+        if let Some(parent) = target.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        fs::write(&target, &serialized)
+            .map_err(|e| format!("Failed to write triggers config to {}: {}", target.display(), e))?;
+        return Ok(target);
+    }
+
+    let sys_path = PathBuf::from(SYSTEM_TRIGGERS_FILE);
+    if let Some(parent) = sys_path.parent() {
+        if parent.exists() && fs::write(&sys_path, &serialized).is_ok() {
+            return Ok(sys_path);
+        }
+    }
+
+    let u_path = user_triggers_config_path();
+    if let Some(parent) = u_path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    fs::write(&u_path, &serialized)
+        .map_err(|e| format!("Failed to write triggers config to {}: {}", u_path.display(), e))?;
+    Ok(u_path)
 }
 
 #[cfg(unix)]

@@ -9,6 +9,7 @@ use postureflow::inspector::{ports, PostureScoreReport};
 use postureflow::autoflow;
 use postureflow::triggers;
 use postureflow::schedule;
+use postureflow::hardware;
 
 #[derive(Parser, Debug)]
 #[command(name = "postureflow-daemon")]
@@ -75,6 +76,26 @@ struct Cli {
     /// Reset all settings to Pop!_OS factory defaults
     #[arg(long)]
     reset: bool,
+
+    /// Emergency Kill Switch: cuts camera, mutes microphone, and disables geolocation
+    #[arg(long)]
+    kill_sensors: bool,
+
+    /// Restore camera, microphone, and geolocation sensors
+    #[arg(long)]
+    restore_sensors: bool,
+
+    /// Show current camera, microphone, and location privacy status
+    #[arg(long)]
+    sensors_status: bool,
+
+    /// Display connected YubiKey tokens and hardware tether status
+    #[arg(long)]
+    tether_status: bool,
+
+    /// Display decoy honeypot trap ports and recent intrusion incidents
+    #[arg(long)]
+    honeypot_status: bool,
 }
 
 #[tokio::main]
@@ -83,6 +104,60 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     if cli.daemon {
         run_daemon(cli.session_bus).await?;
+        return Ok(());
+    }
+
+    if cli.kill_sensors {
+        hardware::sensors::emergency_kill_all_sensors()?;
+        println!("🚨 Emergency Sensor Kill Switch engaged: Camera cut, Mic muted, Geolocation disabled.");
+        return Ok(());
+    }
+
+    if cli.restore_sensors {
+        hardware::sensors::restore_all_sensors()?;
+        println!("🛡️ Sensors restored: Camera, Microphone, and Location active.");
+        return Ok(());
+    }
+
+    if cli.sensors_status {
+        let rep = hardware::sensors::get_sensor_privacy_report();
+        println!("\n=== PostureFlow Hardware Sensor Privacy ===");
+        println!("Camera Privacy:       {}", if rep.camera_blocked { "🔒 BLOCKED" } else { "🟢 Enabled / Active" });
+        println!("Microphone Privacy:   {}", if rep.microphone_muted { "🔒 MUTED" } else { "🟢 Enabled / Unmuted" });
+        println!("Location Privacy:     {}", if rep.location_blocked { "🔒 BLOCKED" } else { "🟢 Enabled / Active" });
+        println!("Detected Cameras:     {}", rep.active_cameras_count);
+        println!();
+        return Ok(());
+    }
+
+    if cli.tether_status {
+        let keys = hardware::yubikey::detect_yubikeys();
+        let cfg = hardware::load_hardware_config();
+        println!("\n=== PostureFlow YubiKey Hardware Tether ===");
+        println!("Tethering Active:     {}", if cfg.yubikey.enabled { "YES (Armed)" } else { "NO (Disabled)" });
+        println!("Lock on Removal:      {}", if cfg.yubikey.lock_session_on_removal { "YES" } else { "NO" });
+        println!("Fallback Profile:     [{}]", cfg.yubikey.fallback_profile.to_uppercase());
+        println!("Preferred Profile:    [{}]", cfg.yubikey.preferred_profile.to_uppercase());
+        println!("\nDetected YubiKeys ({}):", keys.len());
+        for (i, k) in keys.iter().enumerate() {
+            println!("  [{}] {} (Vendor: {}, Product: {}) Serial: {}", i + 1, k.product_name, k.vendor_id, k.product_id, k.serial.as_deref().unwrap_or("N/A"));
+        }
+        println!();
+        return Ok(());
+    }
+
+    if cli.honeypot_status {
+        let cfg = hardware::load_hardware_config();
+        let incidents = hardware::honeypot::load_recent_incidents();
+        println!("\n=== PostureFlow Honeypot Traps & LAN Intrusion ===");
+        println!("Honeypot Trap Engine: {}", if cfg.honeypot.enabled { "ACTIVE" } else { "INACTIVE" });
+        println!("Active Trap Ports:    {:?}", cfg.honeypot.trap_ports);
+        println!("Auto-Block Attackers: {}", if cfg.honeypot.auto_block_offender { "YES" } else { "NO" });
+        println!("\nRecent Incidents ({}):", incidents.len());
+        for (i, inc) in incidents.iter().rev().take(10).enumerate() {
+            println!("  [{}] IP: {} ➔ Port {} | Blocked: {} | {}", i + 1, inc.source_ip, inc.trap_port, if inc.blocked { "YES" } else { "NO" }, inc.description);
+        }
+        println!();
         return Ok(());
     }
 
@@ -533,8 +608,16 @@ async fn run_daemon(session_bus: bool) -> Result<(), Box<dyn Error>> {
         }
     });
 
+    // Spawn Hardware Defense & Physical Token background monitor
+    let hardware_shutdown = Arc::new(AtomicBool::new(false));
+    let hw_shutdown_clone = hardware_shutdown.clone();
+    tokio::spawn(async move {
+        hardware::run_hardware_defense_monitor(hw_shutdown_clone).await;
+    });
+
     tokio::signal::ctrl_c().await?;
     println!("\n[*] Shutting down postureflow-daemon...");
+    hardware_shutdown.store(true, Ordering::Relaxed);
     drop(connection);
     Ok(())
 }

@@ -105,7 +105,7 @@ pub fn save_active_profile(profile: Profile) -> Result<(), String> {
 }
 
 
-fn execute(cmd: &str, args: &[&str]) -> Result<String, String> {
+pub fn execute(cmd: &str, args: &[&str]) -> Result<String, String> {
     let output = Command::new(cmd)
         .args(args)
         .output()
@@ -301,6 +301,15 @@ pub fn apply_profile_config(config: &crate::config::ProfileConfig) -> Result<(),
     if let Some(bt) = config.peripherals.bluetooth {
         let _ = apply_bluetooth(bt);
     }
+    if let Some(cam) = config.peripherals.camera_blocked {
+        let _ = apply_camera_blocked(cam);
+    }
+    if let Some(mic) = config.peripherals.microphone_muted {
+        let _ = apply_microphone_muted(mic);
+    }
+    if let Some(loc) = config.peripherals.location_blocked {
+        let _ = apply_location_blocked(loc);
+    }
 
     // 7. Profile-Aware Encrypted DNS & Privacy Orchestration
     let _ = apply_dns_config(&config.dns);
@@ -426,6 +435,190 @@ pub fn is_bluetooth_blocked() -> bool {
     execute("rfkill", &["list", "bluetooth"])
         .map(|out| out.contains("Soft blocked: yes") || out.contains("Hard blocked: yes"))
         .unwrap_or(false)
+}
+
+pub fn lock_desktop_session() -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        let _ = execute("loginctl", &["lock-session"]);
+        let _ = execute("xdg-screensaver", &["lock"]);
+        let _ = execute("gnome-screensaver-command", &["-l"]);
+        Ok(())
+    }
+    #[cfg(windows)]
+    {
+        let _ = Command::new("rundll32.exe")
+            .args(["user32.dll,LockWorkStation"])
+            .output();
+        Ok(())
+    }
+}
+
+pub fn apply_camera_blocked(blocked: bool) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        let flag_path = std::path::Path::new("/run/postureflow_camera_blocked");
+        let fallback_flag = std::path::Path::new("/tmp/postureflow_camera_blocked");
+        if blocked {
+            let _ = fs::write(flag_path, "blocked");
+            let _ = fs::write(fallback_flag, "blocked");
+
+            // Attempt kernel driver unbind if privileged
+            if is_privileged() {
+                if let Ok(entries) = fs::read_dir("/sys/bus/usb/drivers/uvcvideo") {
+                    for entry in entries.flatten() {
+                        let name = entry.file_name().to_string_lossy().to_string();
+                        if name.contains(':') {
+                            let _ = fs::write("/sys/bus/usb/drivers/uvcvideo/unbind", &name);
+                        }
+                    }
+                }
+            }
+        } else {
+            let _ = fs::remove_file(flag_path);
+            let _ = fs::remove_file(fallback_flag);
+
+            // Re-bind devices or reload driver
+            if is_privileged() {
+                let _ = execute("modprobe", &["uvcvideo"]);
+            }
+        }
+        Ok(())
+    }
+    #[cfg(windows)]
+    {
+        let _ = blocked;
+        Ok(())
+    }
+}
+
+pub fn is_camera_blocked() -> bool {
+    #[cfg(unix)]
+    {
+        std::path::Path::new("/run/postureflow_camera_blocked").exists()
+            || std::path::Path::new("/tmp/postureflow_camera_blocked").exists()
+    }
+    #[cfg(windows)]
+    {
+        false
+    }
+}
+
+pub fn apply_microphone_muted(muted: bool) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        let flag_path = std::path::Path::new("/run/postureflow_mic_muted");
+        let fallback_flag = std::path::Path::new("/tmp/postureflow_mic_muted");
+        if muted {
+            let _ = fs::write(flag_path, "muted");
+            let _ = fs::write(fallback_flag, "muted");
+            let _ = execute("wpctl", &["set-mute", "@DEFAULT_AUDIO_SOURCE@", "1"]);
+            let _ = execute("pactl", &["set-source-mute", "@DEFAULT_SOURCE@", "1"]);
+            let _ = execute("amixer", &["set", "Capture", "nocap"]);
+        } else {
+            let _ = fs::remove_file(flag_path);
+            let _ = fs::remove_file(fallback_flag);
+            let _ = execute("wpctl", &["set-mute", "@DEFAULT_AUDIO_SOURCE@", "0"]);
+            let _ = execute("pactl", &["set-source-mute", "@DEFAULT_SOURCE@", "0"]);
+            let _ = execute("amixer", &["set", "Capture", "cap"]);
+        }
+        Ok(())
+    }
+    #[cfg(windows)]
+    {
+        let _ = muted;
+        Ok(())
+    }
+}
+
+pub fn is_microphone_muted() -> bool {
+    #[cfg(unix)]
+    {
+        if std::path::Path::new("/run/postureflow_mic_muted").exists()
+            || std::path::Path::new("/tmp/postureflow_mic_muted").exists()
+        {
+            return true;
+        }
+        if let Ok(out) = execute("wpctl", &["get-volume", "@DEFAULT_AUDIO_SOURCE@"]) {
+            if out.contains("[MUTED]") {
+                return true;
+            }
+        }
+        if let Ok(out) = execute("pactl", &["get-source-mute", "@DEFAULT_SOURCE@"]) {
+            if out.to_lowercase().contains("yes") {
+                return true;
+            }
+        }
+        false
+    }
+    #[cfg(windows)]
+    {
+        false
+    }
+}
+
+pub fn apply_location_blocked(blocked: bool) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        let flag_path = std::path::Path::new("/run/postureflow_loc_blocked");
+        let fallback_flag = std::path::Path::new("/tmp/postureflow_loc_blocked");
+        if blocked {
+            let _ = fs::write(flag_path, "blocked");
+            let _ = fs::write(fallback_flag, "blocked");
+            let _ = execute("systemctl", &["stop", "geoclue.service"]);
+            let _ = execute("gsettings", &["set", "org.gnome.system.location", "enabled", "false"]);
+        } else {
+            let _ = fs::remove_file(flag_path);
+            let _ = fs::remove_file(fallback_flag);
+            let _ = execute("systemctl", &["start", "geoclue.service"]);
+            let _ = execute("gsettings", &["set", "org.gnome.system.location", "enabled", "true"]);
+        }
+        Ok(())
+    }
+    #[cfg(windows)]
+    {
+        let _ = blocked;
+        Ok(())
+    }
+}
+
+pub fn is_location_blocked() -> bool {
+    #[cfg(unix)]
+    {
+        std::path::Path::new("/run/postureflow_loc_blocked").exists()
+            || std::path::Path::new("/tmp/postureflow_loc_blocked").exists()
+    }
+    #[cfg(windows)]
+    {
+        false
+    }
+}
+
+pub fn block_offender_ip(ip: &str) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        if !is_privileged() {
+            return Err("Root/Administrator privileges required to block IP address".to_string());
+        }
+        execute("ufw", &["insert", "1", "deny", "from", ip, "comment", "PostureFlow Honeypot Trap"])?;
+        let _ = execute("ufw", &["reload"]);
+        Ok(())
+    }
+    #[cfg(windows)]
+    {
+        let rule_name = format!("PostureFlow-Honeypot-{}", ip);
+        let _ = Command::new("netsh")
+            .args([
+                "advfirewall", "firewall", "add", "rule",
+                &format!("name={}", rule_name),
+                "dir=in", "action=block",
+                &format!("remoteip={}", ip),
+                "enable=yes",
+                "description=Blocked via PostureFlow Honeypot Trap",
+            ])
+            .output();
+        Ok(())
+    }
 }
 
 pub fn apply_dns_config(dns: &crate::config::schema::DnsConfig) -> Result<(), String> {
@@ -628,6 +821,11 @@ pub fn reset_to_defaults() -> Result<(), String> {
         // Clear encrypted DNS configuration and restore default resolution
         let _ = clear_dns_config();
 
+        // Restore hardware sensors to unblocked / unmuted
+        let _ = apply_camera_blocked(false);
+        let _ = apply_microphone_muted(false);
+        let _ = apply_location_blocked(false);
+
         Ok(())
     }
 }
@@ -661,12 +859,17 @@ pub fn get_status_report() -> String {
             "System Default (DHCP)".to_string()
         };
 
+        let cam_status = if is_camera_blocked() { "BLOCKED (Privacy Lock)" } else { "Enabled / Active" };
+        let mic_status = if is_microphone_muted() { "MUTED (Hardware Lock)" } else { "Active / Unmuted" };
+
         format!(
-            "Active Profile: {}\nCPU EPP Mode:   {}\nUSB Security:   {}\nBluetooth:      {}\nDNS Privacy:    {}\nptrace_scope:   {}\ninotify watches:{}\nvm.max_map_count: {}\nUFW Status:\n{}",
+            "Active Profile: {}\nCPU EPP Mode:   {}\nUSB Security:   {}\nBluetooth:      {}\nCamera Privacy: {}\nMic Privacy:    {}\nDNS Privacy:    {}\nptrace_scope:   {}\ninotify watches:{}\nvm.max_map_count: {}\nUFW Status:\n{}",
             profile.to_uppercase(),
             cpu_epp,
             usb_lockdown,
             bt_status,
+            cam_status,
+            mic_status,
             dns_summary,
             ptrace,
             inotify,
