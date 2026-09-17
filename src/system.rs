@@ -316,6 +316,7 @@ pub fn apply_profile_config(config: &crate::config::ProfileConfig) -> Result<(),
 
     apply_lifecycle_hooks(previous_config.as_ref(), config);
     save_active_profile_str(&config.profile.id)?;
+    let _ = crate::theme::apply_posture_theme(&config.profile.id);
     Ok(())
     }
 }

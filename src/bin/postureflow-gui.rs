@@ -9,6 +9,7 @@ use postureflow::triggers::{self, TriggerRule, TriggersConfig};
 use postureflow::schedule::{self, CircadianConfig, ScheduleWindow};
 use postureflow::hardware;
 use postureflow::system;
+use postureflow::theme;
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -90,10 +91,14 @@ struct GuiApp {
     honeypot_incidents: Vec<hardware::honeypot::HoneypotIncident>,
     paired_bt_devices: Vec<(String, String)>,
     new_trap_port_str: String,
+    theme_config: theme::DynamicThemeConfig,
+
+    // Single-instance IPC channel
+    ipc_rx: std::sync::mpsc::Receiver<String>,
 }
 
 impl GuiApp {
-    fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+    fn new(_cc: &eframe::CreationContext<'_>, ipc_rx: std::sync::mpsc::Receiver<String>) -> Self {
         let profiles = config::load_all_profiles();
         let active_profile_id = system::get_active_profile();
         let score_report = PostureScoreReport::compute();
@@ -163,6 +168,8 @@ impl GuiApp {
             honeypot_incidents: hardware::honeypot::load_recent_incidents(),
             paired_bt_devices: hardware::proximity::list_paired_bluetooth_devices(),
             new_trap_port_str: "2222".to_string(),
+            theme_config: theme::load_theme_config(),
+            ipc_rx,
         }
     }
 
@@ -179,6 +186,7 @@ impl GuiApp {
         self.yubikey_devices = hardware::yubikey::detect_yubikeys();
         self.honeypot_incidents = hardware::honeypot::load_recent_incidents();
         self.paired_bt_devices = hardware::proximity::list_paired_bluetooth_devices();
+        self.theme_config = theme::load_theme_config();
         if self.selected_index >= self.profiles.len() {
             self.selected_index = 0;
         }
@@ -302,6 +310,26 @@ impl GuiApp {
 
 impl eframe::App for GuiApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // Process single-instance IPC messages to switch tabs and focus window
+        while let Ok(msg) = self.ipc_rx.try_recv() {
+            if msg == "tab:ports" || msg == "ports" {
+                self.main_tab = MainTab::Ports;
+            } else if msg == "tab:cockpit" || msg == "cockpit" {
+                self.main_tab = MainTab::Cockpit;
+            } else if msg == "tab:autoflow" {
+                self.main_tab = MainTab::AutoFlow;
+            } else if msg == "tab:triggers" {
+                self.main_tab = MainTab::Triggers;
+            } else if msg == "tab:schedule" {
+                self.main_tab = MainTab::Schedule;
+            } else if msg == "tab:profiles" {
+                self.main_tab = MainTab::Profiles;
+            }
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Focus);
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::RequestUserAttention(egui::UserAttentionType::Critical));
+        }
+
         // Auto-sync active profile with live system state
         let current_sys_profile = system::get_active_profile();
         if current_sys_profile != self.active_profile_id {
@@ -714,6 +742,58 @@ impl GuiApp {
                 });
             });
 
+            ui.add_space(8.0);
+
+            // Row 2 for Motion Sentry & Ambient Theme Cards
+            ui.columns(2, |cols| {
+                cols[0].group(|ui| {
+                    ui.label(RichText::new("📳 Framework Motion Sentry").strong());
+                    if self.hw_config.motion.armed {
+                        ui.label(RichText::new("Status: ARMED & SENSING").color(Color32::from_rgb(80, 250, 123)).small());
+                    } else {
+                        ui.label(RichText::new("Status: Standby (Disarmed)").color(Color32::from_rgb(160, 170, 195)).small());
+                    }
+                    if let Some(v) = hardware::motion::read_accelerometer_vector() {
+                        ui.label(RichText::new(format!("EC Sensor: [X:{}, Y:{}, Z:{}]", v.x, v.y, v.z)).small().color(Color32::from_rgb(180, 190, 215)));
+                    } else {
+                        ui.label(RichText::new("Accelerometer not available").small().color(Color32::from_rgb(246, 166, 35)));
+                    }
+                    ui.horizontal(|ui| {
+                        if self.hw_config.motion.armed {
+                            if ui.button("🛑 Disarm Sentry").clicked() {
+                                self.hw_config.motion.armed = false;
+                                let _ = hardware::save_hardware_config(&self.hw_config, system::is_privileged());
+                                self.status_message = Some(("Motion Sentry disarmed.".to_string(), false));
+                            }
+                        } else {
+                            if ui.button(RichText::new("🛡️ Arm Sentry Now").color(Color32::BLACK).strong()).clicked() {
+                                self.hw_config.motion.armed = true;
+                                let _ = hardware::save_hardware_config(&self.hw_config, system::is_privileged());
+                                self.status_message = Some(("Motion Sentry armed! Movement will trigger alarm.".to_string(), false));
+                            }
+                        }
+                    });
+                });
+
+                cols[1].group(|ui| {
+                    ui.label(RichText::new("🎨 Dynamic Ambient Theme").strong());
+                    if self.theme_config.enabled {
+                        ui.label(RichText::new("Status: ACTIVE (Posture-Sync)").color(Color32::from_rgb(80, 250, 123)).small());
+                    } else {
+                        ui.label(RichText::new("Status: Manual (Disabled)").color(Color32::from_rgb(160, 170, 195)).small());
+                    }
+                    if let Some(thm) = self.theme_config.themes.get(&self.active_profile_id) {
+                        ui.label(RichText::new(format!("Active Theme: {}", thm.display_name)).small());
+                    }
+                    ui.horizontal(|ui| {
+                        if ui.button("Apply Posture Theme ➔").clicked() {
+                            let _ = theme::apply_posture_theme(&self.active_profile_id);
+                            self.status_message = Some(("Applied dynamic desktop theme and wallpaper!".to_string(), false));
+                        }
+                    });
+                });
+            });
+
             ui.add_space(16.0);
 
             // Actionable Recommendations Card
@@ -1121,6 +1201,121 @@ impl GuiApp {
                                 }
                             });
                     });
+                });
+
+            ui.add_space(16.0);
+
+            // SECTION 4: Framework Laptop Accelerometer Anti-Theft Motion Sentry
+            egui::Frame::new()
+                .fill(Color32::from_rgb(30, 33, 44))
+                .stroke(Stroke::new(1.0, Color32::from_rgb(48, 54, 72)))
+                .corner_radius(CornerRadius::same(10))
+                .inner_margin(16)
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.heading("📳 Framework Accelerometer Anti-Theft Motion Sentry");
+                        if self.hw_config.motion.armed {
+                            ui.label(RichText::new("[ARMED]").color(Color32::from_rgb(80, 250, 123)).strong());
+                        } else {
+                            ui.label(RichText::new("[DISARMED]").color(Color32::from_rgb(160, 170, 195)).small());
+                        }
+                    });
+
+                    ui.label(
+                        RichText::new(
+                            "Monitors the Framework Laptop's embedded ChromeEC 3-axis accelerometer. If someone moves, lifts, or tilts your laptop while stepped away, PostureFlow triggers an audible alarm, locks the screen, and engages Travel lockdown.",
+                        )
+                        .small()
+                        .color(Color32::from_rgb(160, 170, 195)),
+                    );
+
+                    ui.add_space(8.0);
+                    ui.checkbox(&mut self.hw_config.motion.enabled, "Enable Accelerometer Sentry Subsystem");
+                    ui.checkbox(&mut self.hw_config.motion.armed, "Arm Motion Sentry (Active Vigilance)");
+                    ui.checkbox(&mut self.hw_config.motion.auto_arm_on_travel, "Automatically Arm Sentry When Entering Travel Mode");
+                    ui.checkbox(&mut self.hw_config.motion.trigger_alarm_sound, "Sound Audio Alarm Siren on Displacement");
+                    ui.checkbox(&mut self.hw_config.motion.auto_lock_screen, "Lock Desktop Screen Immediately on Displacement");
+                    ui.checkbox(&mut self.hw_config.motion.auto_engage_travel, "Engage 100% Inbound Travel Stealth Lockdown on Displacement");
+
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        ui.label("Sensitivity Threshold (Displacement Δ):");
+                        ui.add(egui::Slider::new(&mut self.hw_config.motion.sensitivity, 500..=5000).suffix(" units"));
+                    });
+
+                    if let Some(v) = hardware::motion::read_accelerometer_vector() {
+                        ui.label(RichText::new(format!("Live ChromeEC Vector: X={}, Y={}, Z={}", v.x, v.y, v.z)).small().color(Color32::from_rgb(80, 250, 123)));
+                    } else {
+                        ui.label(RichText::new("Accelerometer device not detected in /sys/bus/iio/devices").small().color(Color32::from_rgb(246, 166, 35)));
+                    }
+
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        if ui.button("🔊 Test Alarm Sound").clicked() {
+                            hardware::motion::play_alarm_tone();
+                        }
+                    });
+                });
+
+            ui.add_space(16.0);
+
+            // SECTION 5: Posture-Aware Dynamic Ambient Themes & Wallpapers
+            egui::Frame::new()
+                .fill(Color32::from_rgb(30, 33, 44))
+                .stroke(Stroke::new(1.0, Color32::from_rgb(48, 54, 72)))
+                .corner_radius(CornerRadius::same(10))
+                .inner_margin(16)
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.heading("🎨 Posture-Aware Dynamic COSMIC Wallpapers & Themes");
+                        if self.theme_config.enabled {
+                            ui.label(RichText::new("[ACTIVE]").color(Color32::from_rgb(80, 250, 123)).strong());
+                        } else {
+                            ui.label(RichText::new("[DISABLED]").color(Color32::from_rgb(160, 170, 195)).small());
+                        }
+                    });
+
+                    ui.label(
+                        RichText::new(
+                            "Dynamically coordinates COSMIC theme accent colors and desktop wallpapers with your active posture (Amber for Home, Cyan for Work, Emerald for Dev, Crimson for Travel).",
+                        )
+                        .small()
+                        .color(Color32::from_rgb(160, 170, 195)),
+                    );
+
+                    ui.add_space(8.0);
+                    ui.checkbox(&mut self.theme_config.enabled, "Enable Ambient Theme & Wallpaper Sync");
+                    ui.checkbox(&mut self.theme_config.apply_accent, "Apply COSMIC Theme Accent Color");
+                    ui.checkbox(&mut self.theme_config.apply_wallpaper, "Apply Desktop Wallpaper");
+
+                    ui.add_space(8.0);
+                    ui.label(RichText::new("Posture Palettes & Live Switcher:").strong());
+                    ui.columns(4, |cols| {
+                        let entries = [
+                            ("home", "🏠 Home", Color32::from_rgb(255, 140, 0)),
+                            ("work", "💼 Work", Color32::from_rgb(72, 185, 199)),
+                            ("dev", "💻 Dev", Color32::from_rgb(38, 172, 114)),
+                            ("travel", "✈️ Travel", Color32::from_rgb(255, 85, 85)),
+                        ];
+
+                        for (i, (id, label, color)) in entries.iter().enumerate() {
+                            cols[i].group(|ui| {
+                                ui.label(RichText::new(*label).strong().color(*color));
+                                if let Some(t) = self.theme_config.themes.get(*id) {
+                                    ui.label(RichText::new(&t.display_name).small());
+                                }
+                                if ui.button("Apply Theme").clicked() {
+                                    let _ = theme::apply_posture_theme(id);
+                                }
+                            });
+                        }
+                    });
+
+                    ui.add_space(8.0);
+                    if ui.button(RichText::new("💾 Save Theme Settings").color(Color32::BLACK).strong()).clicked() {
+                        let _ = theme::save_theme_config(&self.theme_config, system::is_privileged());
+                        self.status_message = Some(("Dynamic theme configuration saved.".to_string(), false));
+                    }
                 });
         });
     }
@@ -2545,7 +2740,76 @@ impl GuiApp {
     }
 }
 
+fn get_single_instance_socket_path() -> std::path::PathBuf {
+    if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
+        std::path::PathBuf::from(runtime_dir).join("postureflow-gui.sock")
+    } else {
+        std::env::temp_dir().join(format!("postureflow-gui-{}.sock", unsafe { libc::getuid() }))
+    }
+}
+
+struct SocketCleaner(std::path::PathBuf);
+impl Drop for SocketCleaner {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
 fn main() -> Result<(), eframe::Error> {
+    let socket_path = get_single_instance_socket_path();
+    let args: Vec<String> = std::env::args().collect();
+    let tab_arg = if args.iter().any(|a| a == "ports" || a == "inspector") {
+        "tab:ports"
+    } else if args.iter().any(|a| a == "autoflow") {
+        "tab:autoflow"
+    } else if args.iter().any(|a| a == "triggers") {
+        "tab:triggers"
+    } else if args.iter().any(|a| a == "schedule") {
+        "tab:schedule"
+    } else if args.iter().any(|a| a == "profiles") {
+        "tab:profiles"
+    } else {
+        "focus"
+    };
+
+    // 1. If another instance is already running, send focus command and exit immediately
+    if let Ok(mut stream) = std::os::unix::net::UnixStream::connect(&socket_path) {
+        use std::io::Write;
+        let _ = writeln!(stream, "{}", tab_arg);
+        let _ = stream.flush();
+        println!("[*] PostureFlow GUI is already running. Brought existing window to focus.");
+        return Ok(());
+    }
+
+    // 2. Clean up any stale socket from a previous unexpected crash
+    let _ = std::fs::remove_file(&socket_path);
+
+    // 3. Bind the single-instance listener and register automatic cleanup on exit
+    let listener = std::os::unix::net::UnixListener::bind(&socket_path).ok();
+    let _cleaner = SocketCleaner(socket_path.clone());
+
+    let (ipc_tx, ipc_rx) = std::sync::mpsc::channel::<String>();
+    let (ctx_tx, ctx_rx) = std::sync::mpsc::channel::<egui::Context>();
+
+    if let Some(listener) = listener {
+        std::thread::spawn(move || {
+            let egui_ctx = ctx_rx.recv().ok();
+            for stream in listener.incoming() {
+                if let Ok(mut stream) = stream {
+                    use std::io::{BufRead, BufReader};
+                    let mut reader = BufReader::new(&mut stream);
+                    let mut line = String::new();
+                    if reader.read_line(&mut line).is_ok() {
+                        let _ = ipc_tx.send(line.trim().to_string());
+                        if let Some(ref ctx) = egui_ctx {
+                            ctx.request_repaint();
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("PostureFlow - Security Cockpit & Profile Orchestrator")
@@ -2560,7 +2824,9 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "PostureFlow",
         native_options,
-        Box::new(|cc| {
+        Box::new(move |cc| {
+            let _ = ctx_tx.send(cc.egui_ctx.clone());
+
             // Apply refined Pop!_OS / COSMIC dark aesthetics
             let mut visuals = egui::Visuals::dark();
             visuals.panel_fill = Color32::from_rgb(24, 26, 34);
@@ -2573,7 +2839,7 @@ fn main() -> Result<(), eframe::Error> {
             visuals.widgets.active.bg_fill = Color32::from_rgb(72, 185, 199);
             cc.egui_ctx.set_visuals(visuals);
 
-            Ok(Box::new(GuiApp::new(cc)))
+            Ok(Box::new(GuiApp::new(cc, ipc_rx)))
         }),
     )
 }

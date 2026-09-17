@@ -1,4 +1,6 @@
-use tokio::sync::mpsc;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::sync::{mpsc, Mutex};
 use zbus::interface;
 use zbus::zvariant::OwnedObjectPath;
 use crate::applet::state::SharedState;
@@ -7,11 +9,16 @@ use crate::applet::menu::MenuAction;
 pub struct StatusNotifierItem {
     state: SharedState,
     action_tx: mpsc::Sender<MenuAction>,
+    last_activate: Arc<Mutex<Option<Instant>>>,
 }
 
 impl StatusNotifierItem {
     pub fn new(state: SharedState, action_tx: mpsc::Sender<MenuAction>) -> Self {
-        Self { state, action_tx }
+        Self {
+            state,
+            action_tx,
+            last_activate: Arc::new(Mutex::new(None)),
+        }
     }
 }
 
@@ -126,12 +133,27 @@ impl StatusNotifierItem {
     }
 
     async fn activate(&self, _x: i32, _y: i32) {
+        let mut last = self.last_activate.lock().await;
+        let now = Instant::now();
+        if let Some(prev) = *last {
+            if now.duration_since(prev) < Duration::from_millis(750) {
+                return;
+            }
+        }
+        *last = Some(now);
         // Left click launches GUI settings or shows status rather than mutating profile
         let _ = self.action_tx.send(MenuAction::OpenGui).await;
     }
 
-
     async fn secondary_activate(&self, _x: i32, _y: i32) {
+        let mut last = self.last_activate.lock().await;
+        let now = Instant::now();
+        if let Some(prev) = *last {
+            if now.duration_since(prev) < Duration::from_millis(750) {
+                return;
+            }
+        }
+        *last = Some(now);
         let _ = self.action_tx.send(MenuAction::ShowStatus).await;
     }
 

@@ -1,0 +1,76 @@
+name: Snyk Security & Vulnerability Scan
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run weekly security scan on Mondays at 04:00 UTC
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  security:
+    name: Snyk & RustSec Vulnerability Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run RustSec Cargo Audit
+        uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Setup Snyk CLI
+        uses: snyk/actions/setup@master
+
+      - name: Check if Snyk token is configured
+        id: snyk_check
+        run: |
+          if [ -n "${{ secrets.SNYK_TOKEN }}" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning ::SNYK_TOKEN secret not configured in repository. Skipping Snyk cloud analysis."
+          fi
+
+      - name: Snyk Open Source Dependencies Test
+        if: steps.snyk_check.outputs.enabled == 'true'
+        run: |
+          snyk test --all-projects --sarif-file-output=snyk-deps.sarif || true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Snyk Code SAST Security Analysis
+        if: steps.snyk_check.outputs.enabled == 'true'
+        run: |
+          snyk code test --sarif-file-output=snyk-code.sarif || true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Upload Snyk Dependency Findings to GitHub Code Scanning
+        if: steps.snyk_check.outputs.enabled == 'true' && hashFiles('snyk-deps.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: snyk-deps.sarif
+          category: snyk-dependencies
+        continue-on-error: true
+
+      - name: Upload Snyk Code SAST Findings to GitHub Code Scanning
+        if: steps.snyk_check.outputs.enabled == 'true' && hashFiles('snyk-code.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: snyk-code.sarif
+          category: snyk-code
+        continue-on-error: true
