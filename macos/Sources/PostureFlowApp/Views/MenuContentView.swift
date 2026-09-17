@@ -44,6 +44,29 @@ public struct MenuContentView: View {
                 Label("Circadian Schedule", systemImage: "clock.arrow.2.circlepath")
             }
 
+            Toggle(isOn: $state.hardwareDefense.yubikey.enabled) {
+                Label("YubiKey Physical Tether", systemImage: "key.fill")
+            }
+
+            Toggle(isOn: $state.hardwareDefense.honeypot.enabled) {
+                Label("Honeypot Decoy Traps", systemImage: "shield.righthalf.filled")
+            }
+
+            Button {
+                Task {
+                    if state.sensorPrivacyReport.emergencyKillActive {
+                        await state.restoreSensors()
+                    } else {
+                        await state.engageEmergencyKillSwitch()
+                    }
+                }
+            } label: {
+                Label(
+                    state.sensorPrivacyReport.emergencyKillActive ? "Restore Hardware Sensors" : "🚨 Emergency Sensor Kill Switch",
+                    systemImage: state.sensorPrivacyReport.emergencyKillActive ? "mic.slash.fill" : "exclamationmark.shield.fill"
+                )
+            }
+
             Divider()
 
             // Cockpit & Actions

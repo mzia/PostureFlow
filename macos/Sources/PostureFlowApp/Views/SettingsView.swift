@@ -36,8 +36,14 @@ public struct SettingsView: View {
                     Label("Security & Power", systemImage: "shield.checkered")
                 }
                 .tag(3)
+
+            HardwareAndTrapsTab(state: state)
+                .tabItem {
+                    Label("Hardware & Traps", systemImage: "lock.shield.fill")
+                }
+                .tag(4)
         }
-        .frame(width: 580, height: 440)
+        .frame(width: 640, height: 500)
         .padding(16)
     }
 }
@@ -280,3 +286,209 @@ struct SecurityAndPowerTab: View {
         }
     }
 }
+
+// MARK: - Hardware & Traps Tab
+struct HardwareAndTrapsTab: View {
+    @ObservedObject var state: PostureStateStore
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                // Section 1: YubiKey Hardware Presence Tethering
+                GroupBox(label: Label("YubiKey Presence Tethering (\"Zero-Trust Physical Token\")", systemImage: "key.fill")) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle("Enable Continuous USB Hardware Tethering", isOn: $state.hardwareDefense.yubikey.enabled)
+                            .font(.caption)
+                            .fontWeight(.medium)
+
+                        if state.hardwareDefense.yubikey.enabled {
+                            HStack(spacing: 16) {
+                                Toggle("Lock on Unplug", isOn: $state.hardwareDefense.yubikey.lockOnRemoval)
+                                Toggle("Demote to Travel", isOn: $state.hardwareDefense.yubikey.demoteOnRemoval)
+                                Toggle("Auto-Restore on Re-insert", isOn: $state.hardwareDefense.yubikey.restoreOnInsert)
+                            }
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .padding(.leading, 12)
+
+                            Divider()
+
+                            HStack {
+                                Text("Detected Hardware Keys:")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Button("Rescan USB Bus") {
+                                    state.refreshHardwareStatus()
+                                }
+                                .font(.caption2)
+                            }
+
+                            if state.connectedYubikeys.isEmpty {
+                                Text("⚠️ No YubiKey detected on USB bus.")
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                            } else {
+                                ForEach(state.connectedYubikeys) { dev in
+                                    HStack {
+                                        Image(systemName: "checkmark.shield.fill")
+                                            .foregroundColor(.green)
+                                        Text("\(dev.name) (\(dev.vendorId):\(dev.productId))")
+                                            .font(.caption)
+                                            .fontWeight(.medium)
+                                        Spacer()
+                                        Text("ARMED & TETHERED")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.green.opacity(0.2))
+                                            .foregroundColor(.green)
+                                            .cornerRadius(4)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(8)
+                }
+
+                // Section 2: Decoy Honeypot Port Traps
+                GroupBox(label: Label("Honeypot Port Traps & Scan Defense", systemImage: "shield.righthalf.filled")) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle("Arm Decoy Honeypot TCP Listeners", isOn: $state.hardwareDefense.honeypot.enabled)
+                            .font(.caption)
+                            .fontWeight(.medium)
+
+                        if state.hardwareDefense.honeypot.enabled {
+                            HStack {
+                                Text("Trap Ports: 2222 (SSH), 8080 (Web Admin), 4450 (SMB)")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Toggle("Auto-ban scanning IPs via pfctl", isOn: $state.hardwareDefense.honeypot.autoBlockOffenders)
+                                    .font(.caption2)
+                            }
+                            .padding(.leading, 12)
+
+                            Divider()
+
+                            Text("Recent Caught Intrusions (\(state.recentHoneypotIncidents.count)):")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+
+                            if state.recentHoneypotIncidents.isEmpty {
+                                Text("No unauthorized port scans detected yet. Perimeter secure.")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            } else {
+                                ForEach(state.recentHoneypotIncidents.suffix(3)) { inc in
+                                    HStack {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundColor(.red)
+                                        Text("\(inc.peerIP) -> Port \(inc.trapPort)")
+                                            .font(.caption)
+                                        Spacer()
+                                        Text(inc.blocked ? "BLOCKED (pfctl)" : "LOGGED")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .foregroundColor(inc.blocked ? .red : .orange)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(8)
+                }
+
+                // Section 3: Sensor Hardware Privacy Kill Switch
+                GroupBox(label: Label("Camera, Microphone & Sensor Privacy", systemImage: "mic.fill")) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text("Microphone Input:")
+                                    .font(.caption)
+                                Text(state.sensorPrivacyReport.microphoneMuted ? "MUTED (0% input)" : "ACTIVE (\(state.sensorPrivacyReport.inputVolumePercent)%)")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(state.sensorPrivacyReport.microphoneMuted ? .green : .orange)
+                            }
+
+                            Spacer()
+
+                            Button(state.sensorPrivacyReport.microphoneMuted ? "Unmute Mic" : "Mute Mic") {
+                                state.toggleMicrophoneMute()
+                            }
+                            .font(.caption)
+
+                            Button("🚨 Emergency Kill Switch") {
+                                Task { await state.engageEmergencyKillSwitch() }
+                            }
+                            .font(.caption)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.red)
+                            .cornerRadius(6)
+
+                            if state.sensorPrivacyReport.emergencyKillActive {
+                                Button("Restore Sensors") {
+                                    Task { await state.restoreSensors() }
+                                }
+                                .font(.caption)
+                            }
+                        }
+
+                        HStack(spacing: 16) {
+                            Toggle("Auto-mute mic on Travel profile", isOn: $state.hardwareDefense.sensors.muteMicOnTravel)
+                            Toggle("Auto-mute mic on Session Lock", isOn: $state.hardwareDefense.sensors.muteMicOnLock)
+                        }
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    }
+                    .padding(8)
+                }
+
+                // Section 4: Bluetooth Walk-Away Proximity Auto-Lock
+                GroupBox(label: Label("Bluetooth Walk-Away Proximity Auto-Lock", systemImage: "wave.3.right.circle.fill")) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle("Enable BLE Proximity Walk-Away Lockdown", isOn: $state.hardwareDefense.proximity.enabled)
+                            .font(.caption)
+                            .fontWeight(.medium)
+
+                        if state.hardwareDefense.proximity.enabled {
+                            HStack {
+                                Text("Threshold: \(state.hardwareDefense.proximity.rssiThresholdDbm) dBm")
+                                    .font(.caption2)
+                                    .frame(width: 120, alignment: .leading)
+                                Slider(
+                                    value: Binding(
+                                        get: { Double(state.hardwareDefense.proximity.rssiThresholdDbm) },
+                                        set: { state.hardwareDefense.proximity.rssiThresholdDbm = Int($0) }
+                                    ),
+                                    in: -95...(-50),
+                                    step: 5
+                                )
+                            }
+
+                            HStack {
+                                Text("Grace Period: \(state.hardwareDefense.proximity.gracePeriodSeconds)s")
+                                    .font(.caption2)
+                                    .frame(width: 120, alignment: .leading)
+                                Slider(
+                                    value: Binding(
+                                        get: { Double(state.hardwareDefense.proximity.gracePeriodSeconds) },
+                                        set: { state.hardwareDefense.proximity.gracePeriodSeconds = Int($0) }
+                                    ),
+                                    in: 5...30,
+                                    step: 5
+                                )
+                            }
+                        }
+                    }
+                    .padding(8)
+                }
+            }
+            .padding(.trailing, 4)
+        }
+    }
+}
+

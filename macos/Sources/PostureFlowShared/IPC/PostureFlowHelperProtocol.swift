@@ -32,4 +32,16 @@ public protocol PostureFlowHelperProtocol {
     
     /// Flushes PostureFlow pfctl anchor rules and restores factory networking state
     func restoreFirewallDefaults(with reply: @escaping (Bool, String?) -> Void)
+
+    /// Blocks a malicious peer IP via Packet Filter (pfctl)
+    func blockOffenderIP(ip: String, with reply: @escaping (Bool, String?) -> Void)
+
+    /// Engages emergency sensor privacy kill switch (cuts audio input volume to 0)
+    func emergencyKillSensors(with reply: @escaping (Bool, String?) -> Void)
+
+    /// Restores audio and sensor privacy to standard settings
+    func restoreSensors(with reply: @escaping (Bool, String?) -> Void)
+
+    /// Immediately locks the macOS desktop session
+    func lockScreen(with reply: @escaping (Bool, String?) -> Void)
 }

@@ -18,6 +18,11 @@ struct PostureFlowCLI {
             --dev            Apply Dev posture (Local developer ports open)
             --travel         Apply Travel posture (Strict lockdown, ICMP dropped, Low Power Mode)
             --score          Evaluate and display 100-point security posture score breakdown
+            --kill-sensors   Emergency Kill Switch: cuts microphone volume to 0% and locks sensors
+            --restore-sensors Restore microphone and media sensors to standard operation
+            --sensors-status Display live microphone and sensor privacy state
+            --tether-status  Display connected YubiKeys and physical token tethering status
+            --honeypot-status Display armed decoy trap ports and intrusion incident history
             --restore        Flush anchor rules and restore default network state
             --help, -h       Show this help message
         """)
@@ -71,13 +76,19 @@ struct PostureFlowCLI {
             }
 
         case "--score":
+            let yubikeys = YubikeyDetector.detectYubikeys()
+            let isEmergency = SensorPrivacyController.isEmergencyKillActive()
             let score = PostureScore(
                 mode: config.activeProfile,
                 isFirewallActive: true,
                 isStealthModeActive: (config.activeProfile == .travel),
                 isVPNActive: false,
                 openPortCount: (config.activeProfile == .dev ? 2 : 0),
-                isLowPowerMode: config.activeProfile.enablesLowPowerMode
+                isLowPowerMode: config.activeProfile.enablesLowPowerMode,
+                isHardwareTetherActive: config.hardwareDefense.yubikey.enabled && !yubikeys.isEmpty,
+                isHoneypotActive: config.hardwareDefense.honeypot.enabled,
+                isSensorPrivacyActive: isEmergency,
+                isProximityLockActive: config.hardwareDefense.proximity.enabled
             )
             print("PostureFlow Security Score: \(score.score)/100 (Grade: \(score.grade))")
             print("Score Breakdown:")
@@ -90,6 +101,61 @@ struct PostureFlowCLI {
                     print("  ⚠️ \(rec)")
                 }
             }
+
+        case "--kill-sensors":
+            let success = SensorPrivacyController.emergencyKillAllSensors()
+            if success {
+                print("🚨 Emergency Sensor Kill Switch engaged! Input volume set to 0%.")
+            } else {
+                print("⚠️ Failed to cut audio input volume.")
+            }
+
+        case "--restore-sensors":
+            let success = SensorPrivacyController.restoreAllSensors()
+            if success {
+                print("✔ Sensors restored to standard operation.")
+            } else {
+                print("⚠️ Failed to restore audio input volume.")
+            }
+
+        case "--sensors-status":
+            let report = SensorPrivacyController.getReport()
+            print("┌────────────────────────────────────────────────────────┐")
+            print("│ PostureFlow macOS Hardware & Sensor Privacy            │")
+            print("├────────────────────────────────────────────────────────┤")
+            print("│ Microphone Input : \((report.microphoneMuted ? "MUTED (0%)" : "ACTIVE (\(report.inputVolumePercent)%)").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Camera Lockout   : \((report.cameraBlocked ? "ENGAGED" : "Standard").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Location Lockout : \((report.locationBlocked ? "ENGAGED" : "Standard").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Emergency Kill   : \((report.emergencyKillActive ? "ACTIVE (RED)" : "INACTIVE").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("└────────────────────────────────────────────────────────┘")
+
+        case "--tether-status":
+            let keys = YubikeyDetector.detectYubikeys()
+            let cfg = config.hardwareDefense.yubikey
+            print("┌────────────────────────────────────────────────────────┐")
+            print("│ PostureFlow YubiKey Physical Token Tether              │")
+            print("├────────────────────────────────────────────────────────┤")
+            print("│ Tethering Master : \((cfg.enabled ? "Enabled" : "Disabled").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Auto-Lock        : \((cfg.lockOnRemoval ? "Enabled" : "Disabled").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Demote on Unplug : \((cfg.demoteOnRemoval ? "Travel Profile" : "Disabled").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Auto-Restore     : \((cfg.restoreOnInsert ? "Enabled" : "Disabled").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Connected Keys   : \(String(keys.count).padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            for k in keys {
+                print("│   -> \(k.name.padding(toLength: 49, withPad: " ", startingAt: 0))│")
+            }
+            print("└────────────────────────────────────────────────────────┘")
+
+        case "--honeypot-status":
+            let cfg = config.hardwareDefense.honeypot
+            let incidents = HoneypotLedger.loadRecentIncidents()
+            print("┌────────────────────────────────────────────────────────┐")
+            print("│ PostureFlow Honeypot Decoy Traps & LAN Defense         │")
+            print("├────────────────────────────────────────────────────────┤")
+            print("│ Traps Master     : \((cfg.enabled ? "Enabled" : "Disabled").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Trap Ports       : \(cfg.trapPorts.map(String.init).joined(separator: ", ").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Auto-ban via pf  : \((cfg.autoBlockOffenders ? "Enabled" : "Disabled").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Total Incidents  : \(String(incidents.count).padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("└────────────────────────────────────────────────────────┘")
 
         case "--restore":
             print("Restoring default network settings...")

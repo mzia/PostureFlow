@@ -133,6 +133,33 @@ public final class PacketFilterManager {
         return result.exitCode == 0 && !result.output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// Blocks an offending IP address in the Packet Filter anchor
+    public func blockIP(_ ip: String) -> (success: Bool, error: String?) {
+        let sanitizedIP = ip.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !sanitizedIP.isEmpty, !sanitizedIP.contains("127.0.0.1"), !sanitizedIP.contains("::1") else {
+            return (false, "Cannot block loopback IP")
+        }
+
+        let anchorURL = URL(fileURLWithPath: Self.anchorPath)
+        var existingContent = (try? String(contentsOf: anchorURL, encoding: .utf8)) ?? ""
+        let rule = "block drop in quick from \(sanitizedIP) to any"
+
+        if !existingContent.contains(rule) {
+            existingContent += "\n# Auto-blocked honeypot offender\n\(rule)\n"
+            do {
+                try existingContent.write(to: anchorURL, atomically: true, encoding: .utf8)
+                let loadResult = executeCommand("/sbin/pfctl", arguments: [
+                    "-a", Self.anchorName,
+                    "-f", Self.anchorPath
+                ])
+                return (loadResult.exitCode == 0, loadResult.exitCode == 0 ? nil : loadResult.output)
+            } catch {
+                return (false, error.localizedDescription)
+            }
+        }
+        return (true, nil)
+    }
+
     private func executeCommand(_ binary: String, arguments: [String]) -> (exitCode: Int32, output: String) {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: binary)

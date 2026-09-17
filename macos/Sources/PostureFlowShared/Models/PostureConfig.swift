@@ -9,6 +9,7 @@ public struct PostureConfig: Codable, Sendable {
     public var whitelistedSSIDs: [String: PostureMode]
     public var appTriggers: [String: PostureMode]
     public var devPorts: [Int]
+    public var hardwareDefense: HardwareDefenseConfig
 
     public init(
         activeProfile: PostureMode = .work,
@@ -17,7 +18,8 @@ public struct PostureConfig: Codable, Sendable {
         circadianEnabled: Bool = false,
         whitelistedSSIDs: [String: PostureMode] = [:],
         appTriggers: [String: PostureMode] = Self.defaultAppTriggers,
-        devPorts: [Int] = [3000, 5173, 8000, 8080]
+        devPorts: [Int] = [3000, 5173, 8000, 8080],
+        hardwareDefense: HardwareDefenseConfig = HardwareDefenseConfig()
     ) {
         self.activeProfile = activeProfile
         self.autoFlowEnabled = autoFlowEnabled
@@ -26,6 +28,7 @@ public struct PostureConfig: Codable, Sendable {
         self.whitelistedSSIDs = whitelistedSSIDs
         self.appTriggers = appTriggers
         self.devPorts = devPorts
+        self.hardwareDefense = hardwareDefense
     }
 
     /// Standard macOS bundle identifiers mapped to postures
