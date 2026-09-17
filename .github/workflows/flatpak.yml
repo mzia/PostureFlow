@@ -3,8 +3,25 @@ name: Flatpak Build & Verification
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'data/**'
+      - 'scripts/**'
+      - 'Cargo.*'
+      - 'io.github.mzia.PostureFlow.yml'
+      - 'cargo-sources.json'
+      - '.github/workflows/flatpak.yml'
   pull_request:
     branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'data/**'
+      - 'scripts/**'
+      - 'Cargo.*'
+      - 'io.github.mzia.PostureFlow.yml'
+      - 'cargo-sources.json'
+      - '.github/workflows/flatpak.yml'
+  workflow_dispatch:
 
 jobs:
   flatpak-verify:
@@ -37,6 +54,9 @@ jobs:
     name: Build Flatpak Bundle
     needs: flatpak-verify
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-24.08
+      options: --privileged
 
     steps:
       - name: Checkout repository
