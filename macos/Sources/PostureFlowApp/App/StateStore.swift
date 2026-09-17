@@ -124,7 +124,7 @@ public final class PostureStateStore: ObservableObject {
 
         // 4. YubiKey Hardware Tethering Monitor
         yubiKeyMonitor.start(
-            configProvider: { [weak self] in self?.hardwareDefense.yubikey ?? YubikeyTetherConfig() },
+            config: hardwareDefense.yubikey,
             onAction: { [weak self] action in
                 Task { @MainActor [weak self] in
                     guard let self = self else { return }
@@ -155,6 +155,7 @@ public final class PostureStateStore: ObservableObject {
     }
 
     private func updateHardwareEngines() {
+        yubiKeyMonitor.update(config: hardwareDefense.yubikey)
         updateHoneypotEngine()
         updateProximityEngine()
         recalculateScore()

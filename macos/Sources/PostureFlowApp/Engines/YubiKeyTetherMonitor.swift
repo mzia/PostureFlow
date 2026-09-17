@@ -7,16 +7,19 @@ public final class YubiKeyTetherMonitor: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.postureflow.yubikeytether", qos: .utility)
     private var wasPresent: Bool = false
     private var savedProfileBeforeDemote: PostureMode?
+    private var config: YubikeyTetherConfig = YubikeyTetherConfig()
 
     public init() {}
 
     /// Starts polling USB presence every `interval` seconds (default 2s)
     public func start(
         interval: TimeInterval = 2.0,
-        configProvider: @escaping @Sendable () -> YubikeyTetherConfig,
+        config: YubikeyTetherConfig,
         onAction: @escaping @Sendable (YubiKeyTetherAction) -> Void
     ) {
         stop()
+
+        self.config = config
 
         // Initial detection
         let initialDevices = YubikeyDetector.detectYubikeys()
@@ -27,7 +30,7 @@ public final class YubiKeyTetherMonitor: @unchecked Sendable {
             self.timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
                 guard let self = self else { return }
                 self.queue.async {
-                    let config = configProvider()
+                    let config = self.config
                     guard config.enabled else { return }
 
                     let currentDevices = YubikeyDetector.detectYubikeys()
@@ -61,8 +64,17 @@ public final class YubiKeyTetherMonitor: @unchecked Sendable {
         }
     }
 
+    /// Updates active tethering configuration dynamically without recreating the timer
+    public func update(config: YubikeyTetherConfig) {
+        self.queue.async {
+            self.config = config
+        }
+    }
+
     public func setSavedProfileBeforeDemote(_ profile: PostureMode?) {
-        self.savedProfileBeforeDemote = profile
+        self.queue.async {
+            self.savedProfileBeforeDemote = profile
+        }
     }
 
     public func stop() {
