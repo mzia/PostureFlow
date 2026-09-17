@@ -9,3 +9,4 @@ pub mod triggers;
 pub mod schedule;
 pub mod platform;
 pub mod hardware;
+pub mod theme;

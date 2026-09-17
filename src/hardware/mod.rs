@@ -2,6 +2,7 @@ pub mod yubikey;
 pub mod honeypot;
 pub mod sensors;
 pub mod proximity;
+pub mod motion;
 
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -21,6 +22,8 @@ pub struct HardwareDefenseConfig {
     pub sensors: sensors::SensorPrivacyConfig,
     #[serde(default)]
     pub proximity: proximity::ProximityConfig,
+    #[serde(default)]
+    pub motion: motion::MotionSentryConfig,
 }
 
 impl HardwareDefenseConfig {
@@ -90,6 +93,8 @@ pub async fn run_hardware_defense_monitor(shutdown: Arc<AtomicBool>) {
     let mut was_yubikey_present = yubikey::is_yubikey_present(None);
     let mut consecutive_out_of_range: u32 = 0;
     let mut proximity_locked = false;
+    let mut baseline_accel: Option<motion::AccelVector> = None;
+    let mut sentry_triggered = false;
 
     // Spawn honeypot listeners if configured
     let config = load_hardware_config();
@@ -176,6 +181,34 @@ pub async fn run_hardware_defense_monitor(shutdown: Arc<AtomicBool>) {
             }
         }
 
+        // 3. Accelerometer Anti-Theft Motion Sentry
+        let mut motion_cfg = cfg.motion.clone();
+        if motion_cfg.auto_arm_on_travel && current_profile == "travel" && motion_cfg.enabled {
+            motion_cfg.armed = true;
+        }
+
+        if motion_cfg.enabled && motion_cfg.armed {
+            if let Some(current_vector) = motion::read_accelerometer_vector() {
+                if let Some(baseline) = baseline_accel {
+                    if !sentry_triggered {
+                        if let Some(action) = motion::evaluate_motion_transition(current_vector, baseline, &motion_cfg) {
+                            motion::execute_motion_action(action, &motion_cfg);
+                            sentry_triggered = true;
+                        }
+                    }
+                } else {
+                    baseline_accel = Some(current_vector);
+                    println!(
+                        "[+] 📳 Motion Sentry ARMED. Calibrated baseline: [{}, {}, {}]",
+                        current_vector.x, current_vector.y, current_vector.z
+                    );
+                }
+            }
+        } else if baseline_accel.is_some() {
+            baseline_accel = None;
+            sentry_triggered = false;
+        }
+
         tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
     }
 
@@ -193,6 +226,8 @@ mod tests {
         assert!(!cfg.honeypot.enabled);
         assert!(!cfg.sensors.camera_blocked);
         assert!(!cfg.proximity.enabled);
+        assert!(cfg.motion.enabled);
+        assert!(!cfg.motion.armed);
     }
 
     #[test]
@@ -204,6 +239,8 @@ mod tests {
         cfg.sensors.camera_blocked = true;
         cfg.proximity.enabled = true;
         cfg.proximity.target_device_mac = Some("11:22:33:44:55:66".to_string());
+        cfg.motion.armed = true;
+        cfg.motion.sensitivity = 2500;
 
         let toml = cfg.to_toml().unwrap();
         let loaded = HardwareDefenseConfig::from_toml(&toml).unwrap();

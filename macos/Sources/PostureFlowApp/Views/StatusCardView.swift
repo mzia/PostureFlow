@@ -1,7 +1,8 @@
 import SwiftUI
 import PostureFlowShared
 
-/// Compact status card rendered at the top of the PostureFlow MenuBarExtra popover.
+/// Compact status header rendered at the top of the PostureFlow macOS MenuBarExtra popover.
+/// Adheres strictly to Apple Human Interface Guidelines for Control Center and Menu Bar accessories.
 public struct StatusCardView: View {
     @ObservedObject var state: PostureStateStore
 
@@ -10,17 +11,48 @@ public struct StatusCardView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // Header: Posture name + Score Grade
-            HStack {
-                Image(systemName: state.currentMode.sfSymbol)
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(Color(hex: state.currentMode.accentColorHex))
+        VStack(spacing: 12) {
+            // Hero Status Row
+            HStack(alignment: .center, spacing: 12) {
+                // Vibrant App Icon Badge with Soft Glow
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(hex: state.currentMode.accentColorHex),
+                                    Color(hex: state.currentMode.accentColorHex).opacity(0.8)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 38, height: 38)
+                        .shadow(color: Color(hex: state.currentMode.accentColorHex).opacity(0.35), radius: 6, x: 0, y: 2)
 
+                    Image(systemName: state.currentMode.sfSymbol)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.white)
+                }
+
+                // Posture Name & Inbound Policy
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(state.currentMode.displayName)
-                        .font(.headline)
-                        .fontWeight(.semibold)
+                    HStack(spacing: 6) {
+                        Text(state.currentMode.displayName)
+                            .font(.system(.headline, design: .rounded))
+                            .fontWeight(.bold)
+                            .foregroundColor(.primary)
+
+                        if state.currentMode == .travel {
+                            Text("STEALTH")
+                                .font(.system(size: 9, weight: .heavy, design: .rounded))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1.5)
+                                .background(Color.red.opacity(0.18))
+                                .foregroundColor(.red)
+                                .clipShape(Capsule())
+                        }
+                    }
 
                     Text(state.currentMode.inboundFirewallPolicy)
                         .font(.caption2)
@@ -30,56 +62,106 @@ public struct StatusCardView: View {
 
                 Spacer()
 
-                // Score Badge
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text("\(state.postureScore.score)/100")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                    Text("Grade \(state.postureScore.grade)")
-                        .font(.system(size: 9, weight: .bold))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(Color(hex: state.currentMode.accentColorHex).opacity(0.2))
-                        .foregroundColor(Color(hex: state.currentMode.accentColorHex))
-                        .cornerRadius(4)
-                }
+                // Apple-style Score Capsule
+                ScoreBadge(score: state.postureScore.score, grade: state.postureScore.grade, accentHex: state.currentMode.accentColorHex)
             }
 
-            Divider()
-
-            // Sub-status indicators: SSID & VPN
-            HStack(spacing: 12) {
-                // Wi-Fi / SSID
-                HStack(spacing: 4) {
-                    Image(systemName: "wifi")
-                        .font(.caption)
-                    Text(state.connectedSSID ?? "No Wi-Fi")
-                        .font(.caption2)
+            // Quick Telemetry Ribbon (Wi-Fi, VPN, and Root Helper)
+            HStack(spacing: 8) {
+                // Wi-Fi Chip
+                HStack(spacing: 5) {
+                    Image(systemName: state.connectedSSID != nil ? "wifi" : "wifi.slash")
+                        .font(.system(size: 11, weight: .medium))
+                    Text(state.connectedSSID ?? "Disconnected")
+                        .font(.system(size: 11, weight: .medium))
                         .lineLimit(1)
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
+                .clipShape(Capsule())
                 .foregroundColor(.secondary)
 
                 Spacer()
 
-                // VPN Status
-                HStack(spacing: 4) {
+                // VPN Indicator Chip
+                HStack(spacing: 5) {
                     Image(systemName: state.isVPNActive ? "lock.shield.fill" : "shield.slash")
-                        .font(.caption)
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundColor(state.isVPNActive ? .green : .secondary)
                     Text(state.isVPNActive ? "VPN Active" : "No VPN")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(state.isVPNActive ? .primary : .secondary)
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    (state.isVPNActive ? Color.green.opacity(0.12) : Color(NSColor.controlBackgroundColor).opacity(0.6))
+                )
+                .clipShape(Capsule())
 
-                // Helper Status Indicator
+                // Privileged Daemon Status Dot
                 Circle()
                     .fill(state.helperConnected ? Color.green : Color.orange)
-                    .frame(width: 7, height: 7)
-                    .help(state.helperConnected ? "Root Helper Connected" : "Helper Unregistered (Mock Mode)")
+                    .frame(width: 8, height: 8)
+                    .overlay(
+                        Circle()
+                            .stroke((state.helperConnected ? Color.green : Color.orange).opacity(0.4), lineWidth: 2)
+                            .scaleEffect(state.helperConnected ? 1.4 : 1.0)
+                    )
+                    .help(state.helperConnected ? "Root PacketFilter Helper Active" : "Helper Unregistered (Mock Mode)")
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(NSColor.windowBackgroundColor).opacity(0.75))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                )
+        )
+    }
+}
+
+// MARK: - Score Badge Subview
+private struct ScoreBadge: View {
+    let score: Int
+    let grade: String
+    let accentHex: String
+
+    var gradeColor: Color {
+        switch grade {
+        case "A+": return Color.green
+        case "A":  return Color(hex: "#10B981")
+        case "B":  return Color.blue
+        case "C":  return Color.orange
+        default:   return Color.red
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(grade)
+                .font(.system(size: 11, weight: .heavy, design: .rounded))
+                .foregroundColor(.white)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2.5)
+                .background(gradeColor)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+
+            Text("\(score)%")
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundColor(.primary)
+        }
+        .padding(4)
+        .padding(.trailing, 4)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.8))
+        .clipShape(Capsule())
+        .overlay(
+            Capsule()
+                .stroke(gradeColor.opacity(0.25), lineWidth: 1)
+        )
     }
 }
 
