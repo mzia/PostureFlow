@@ -96,6 +96,12 @@ pub struct PeripheralsConfig {
     pub block_new_usb: Option<bool>,
     #[serde(default)]
     pub bluetooth: Option<bool>,
+    #[serde(default)]
+    pub camera_blocked: Option<bool>,
+    #[serde(default)]
+    pub microphone_muted: Option<bool>,
+    #[serde(default)]
+    pub location_blocked: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]

@@ -410,15 +410,24 @@ pub fn save_schedule_config(cfg: &CircadianConfig) -> Result<(), String> {
     let toml_str = toml::to_string_pretty(cfg)
         .map_err(|e| format!("Failed to serialize schedule config: {}", e))?;
 
-    let path = primary_config_path();
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
+    let p_path = primary_config_path();
+    if let Some(parent) = p_path.parent() {
+        if parent.exists() && fs::write(&p_path, &toml_str).is_ok() {
+            return Ok(());
+        }
     }
 
-    fs::write(&path, toml_str)
-        .map_err(|e| format!("Failed to write schedule config to {:?}: {}", path, e))?;
+    if let Some(u_path) = user_config_path() {
+        if let Some(parent) = u_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        fs::write(&u_path, &toml_str)
+            .map_err(|e| format!("Failed to write schedule config to {:?}: {}", u_path, e))?;
+        return Ok(());
+    }
 
-    Ok(())
+    fs::write(&p_path, toml_str)
+        .map_err(|e| format!("Failed to write schedule config to {:?}: {}", p_path, e))
 }
 
 #[cfg(test)]

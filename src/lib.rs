@@ -8,3 +8,4 @@ pub mod autoflow;
 pub mod triggers;
 pub mod schedule;
 pub mod platform;
+pub mod hardware;

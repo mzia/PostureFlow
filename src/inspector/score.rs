@@ -132,6 +132,33 @@ impl PostureScoreReport {
             }
         }
 
+        if crate::system::is_camera_blocked() {
+            recommendations.push("📷 Hardware Camera Privacy: Webcam driver/interface is blocked.".to_string());
+        }
+        if crate::system::is_microphone_muted() {
+            recommendations.push("🎙️ Hardware Audio Privacy: Microphone is muted at subsystem level.".to_string());
+        }
+
+        let hw_cfg = crate::hardware::load_hardware_config();
+        if hw_cfg.yubikey.enabled {
+            if crate::hardware::yubikey::is_yubikey_present(hw_cfg.yubikey.target_serial.as_deref()) {
+                recommendations.push("🔑 YubiKey Tether: Physical hardware token presence is actively enforced.".to_string());
+            } else {
+                recommendations.push("⚠️ YubiKey Tether: Hardware token is not currently attached.".to_string());
+            }
+        }
+
+        if hw_cfg.honeypot.enabled {
+            recommendations.push(format!(
+                "🪤 Decoy Honeypot: Active intrusion traps listening on ports {:?}.",
+                hw_cfg.honeypot.trap_ports
+            ));
+        }
+
+        if hw_cfg.proximity.enabled {
+            recommendations.push("🛰️ Walk-Away Security: Bluetooth RSSI proximity auto-lock is armed.".to_string());
+        }
+
         let total_score = firewall_score + attack_surface_score + kernel_score + limits_score;
 
         let letter_grade = match total_score {

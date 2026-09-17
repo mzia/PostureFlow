@@ -88,6 +88,9 @@ fn builtin_home() -> ProfileConfig {
         peripherals: PeripheralsConfig {
             block_new_usb: Some(false),
             bluetooth: Some(true),
+            camera_blocked: Some(false),
+            microphone_muted: Some(false),
+            location_blocked: Some(false),
         },
         desktop: DesktopConfig { idle_delay_seconds: Some(1800) },
         hooks: HooksConfig::default(),
@@ -145,6 +148,9 @@ fn builtin_work() -> ProfileConfig {
         peripherals: PeripheralsConfig {
             block_new_usb: Some(false),
             bluetooth: Some(true),
+            camera_blocked: Some(false),
+            microphone_muted: Some(false),
+            location_blocked: Some(false),
         },
         desktop: DesktopConfig { idle_delay_seconds: Some(300) },
         hooks: HooksConfig::default(),
@@ -207,6 +213,9 @@ fn builtin_dev() -> ProfileConfig {
         peripherals: PeripheralsConfig {
             block_new_usb: Some(false),
             bluetooth: Some(true),
+            camera_blocked: Some(false),
+            microphone_muted: Some(false),
+            location_blocked: Some(false),
         },
         desktop: DesktopConfig { idle_delay_seconds: Some(1800) },
         hooks: HooksConfig {
@@ -276,6 +285,9 @@ fn builtin_travel() -> ProfileConfig {
         peripherals: PeripheralsConfig {
             block_new_usb: Some(true),
             bluetooth: Some(true),
+            camera_blocked: Some(true),
+            microphone_muted: Some(true),
+            location_blocked: Some(true),
         },
         desktop: DesktopConfig { idle_delay_seconds: Some(120) },
         hooks: HooksConfig::default(),
