@@ -163,7 +163,9 @@ private struct OverviewDetailView: View {
                         get: { state.currentMode },
                         set: { newMode in
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                                Task { await state.switchTo(newMode) }
+                                Task { @MainActor in
+                                    await state.switchTo(newMode)
+                                }
                             }
                         }
                     )) {
@@ -651,7 +653,9 @@ private struct FirewallDetailView: View {
             let service = SMAppService.daemon(plistName: "com.postureflow.helper.plist")
             do {
                 try service.register()
-                Task { await state.syncWithDaemon() }
+                Task { @MainActor in
+                    await state.syncWithDaemon()
+                }
             } catch {
                 NSLog("[SettingsView] Failed to register daemon: %@", error.localizedDescription)
             }

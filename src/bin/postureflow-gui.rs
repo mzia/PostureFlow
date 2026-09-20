@@ -2740,6 +2740,7 @@ impl GuiApp {
     }
 }
 
+#[cfg(unix)]
 fn get_single_instance_socket_path() -> std::path::PathBuf {
     if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
         std::path::PathBuf::from(runtime_dir).join("postureflow-gui.sock")
@@ -2748,7 +2749,9 @@ fn get_single_instance_socket_path() -> std::path::PathBuf {
     }
 }
 
+#[cfg(unix)]
 struct SocketCleaner(std::path::PathBuf);
+#[cfg(unix)]
 impl Drop for SocketCleaner {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.0);
@@ -2756,6 +2759,7 @@ impl Drop for SocketCleaner {
 }
 
 fn main() -> Result<(), eframe::Error> {
+    #[cfg(unix)]
     let socket_path = get_single_instance_socket_path();
     let args: Vec<String> = std::env::args().collect();
     let tab_arg = if args.iter().any(|a| a == "ports" || a == "inspector") {
@@ -2772,25 +2776,31 @@ fn main() -> Result<(), eframe::Error> {
         "focus"
     };
 
-    // 1. If another instance is already running, send focus command and exit immediately
-    if let Ok(mut stream) = std::os::unix::net::UnixStream::connect(&socket_path) {
-        use std::io::Write;
-        let _ = writeln!(stream, "{}", tab_arg);
-        let _ = stream.flush();
-        println!("[*] PostureFlow GUI is already running. Brought existing window to focus.");
-        return Ok(());
+    #[cfg(unix)]
+    {
+        // 1. If another instance is already running, send focus command and exit immediately
+        if let Ok(mut stream) = std::os::unix::net::UnixStream::connect(&socket_path) {
+            use std::io::Write;
+            let _ = writeln!(stream, "{}", tab_arg);
+            let _ = stream.flush();
+            println!("[*] PostureFlow GUI is already running. Brought existing window to focus.");
+            return Ok(());
+        }
+
+        // 2. Clean up any stale socket from a previous unexpected crash
+        let _ = std::fs::remove_file(&socket_path);
     }
 
-    // 2. Clean up any stale socket from a previous unexpected crash
-    let _ = std::fs::remove_file(&socket_path);
-
     // 3. Bind the single-instance listener and register automatic cleanup on exit
+    #[cfg(unix)]
     let listener = std::os::unix::net::UnixListener::bind(&socket_path).ok();
+    #[cfg(unix)]
     let _cleaner = SocketCleaner(socket_path.clone());
 
     let (ipc_tx, ipc_rx) = std::sync::mpsc::channel::<String>();
     let (ctx_tx, ctx_rx) = std::sync::mpsc::channel::<egui::Context>();
 
+    #[cfg(unix)]
     if let Some(listener) = listener {
         std::thread::spawn(move || {
             let egui_ctx = ctx_rx.recv().ok();

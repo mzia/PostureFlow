@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Product Id="*" Name="PostureFlow" Language="1033" Version="1.0.0.0" Manufacturer="M. Zia" UpgradeCode="7E9E8D7A-6B5C-4F3E-2D1C-0B9A8F7E6D5C">
+  <Product Id="*" Name="PostureFlow" Language="1033" Version="1.0.1.0" Manufacturer="M. Zia" UpgradeCode="7E9E8D7A-6B5C-4F3E-2D1C-0B9A8F7E6D5C">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
     <MediaTemplate EmbedCab="yes" />

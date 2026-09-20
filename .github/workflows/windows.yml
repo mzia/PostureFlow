@@ -64,11 +64,43 @@ jobs:
           Copy-Item windows/uninstall.ps1 dist/windows-x64/
           Copy-Item windows/resources/PostureFlow.manifest dist/windows-x64/
           Copy-Item windows/README.md dist/windows-x64/
-          Compress-Archive -Path dist/windows-x64/* -DestinationPath dist/postureflow_1.0.0_windows_x64.zip -Force
+          Compress-Archive -Path dist/windows-x64/* -DestinationPath dist/postureflow_1.0.1_windows_x64.zip -Force
+
+      - name: Build Windows MSI Installer
+        shell: pwsh
+        run: |
+          $candle = $null
+          $light = $null
+          if (Get-Command candle.exe -ErrorAction SilentlyContinue) {
+            $candle = "candle.exe"
+            $light = "light.exe"
+          } elseif (Test-Path "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin\candle.exe") {
+            $candle = "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin\candle.exe"
+            $light = "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin\light.exe"
+          } elseif (Test-Path "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin\candle.exe") {
+            $candle = "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin\candle.exe"
+            $light = "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin\light.exe"
+          }
+
+          if ($candle -and $light) {
+            Write-Host "==> Compiling MSI installer with WiX..." -ForegroundColor Cyan
+            & $candle windows/installer/PostureFlow.wxs -out target/PostureFlow.wixobj
+            & $light target/PostureFlow.wixobj -out dist/PostureFlow-1.0.1-x64.msi -ext WixUIExtension
+            Write-Host "==> MSI successfully generated at dist/PostureFlow-1.0.1-x64.msi" -ForegroundColor Green
+          } else {
+            Write-Warning "WiX Toolset not found. Skipping MSI build."
+          }
 
       - name: Upload Windows Distribution Package
         uses: actions/upload-artifact@v4
         with:
           name: postureflow-windows-x64
-          path: dist/postureflow_1.0.0_windows_x64.zip
+          path: dist/postureflow_1.0.1_windows_x64.zip
+
+      - name: Upload Windows MSI Installer
+        uses: actions/upload-artifact@v4
+        if: hashFiles('dist/PostureFlow-1.0.1-x64.msi') != ''
+        with:
+          name: postureflow-windows-msi
+          path: dist/PostureFlow-1.0.1-x64.msi
 

@@ -104,6 +104,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let _ = session_conn.request_name("io.github.mzia.PostureFlow.Applet").await;
 
     // Automatically reap child processes to prevent defunct zombies
+    #[cfg(unix)]
     unsafe {
         libc::signal(libc::SIGCHLD, libc::SIG_IGN);
     }

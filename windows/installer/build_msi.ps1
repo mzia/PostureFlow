@@ -16,6 +16,10 @@ if (-not (Get-Command candle.exe -ErrorAction SilentlyContinue)) {
 
 Write-Host "==> Compiling WiX installer..." -ForegroundColor Cyan
 candle.exe windows\installer\PostureFlow.wxs -out target\PostureFlow.wixobj
-light.exe target\PostureFlow.wixobj -out target\PostureFlow-1.0.0-x64.msi -ext WixUIExtension
+light.exe target\PostureFlow.wixobj -out target\PostureFlow-1.0.1-x64.msi -ext WixUIExtension
 
-Write-Host "==> MSI successfully generated at target\PostureFlow-1.0.0-x64.msi" -ForegroundColor Green
+if (Test-Path dist) {
+    Copy-Item target\PostureFlow-1.0.1-x64.msi dist\PostureFlow-1.0.1-x64.msi -Force
+}
+
+Write-Host "==> MSI successfully generated at target\PostureFlow-1.0.1-x64.msi" -ForegroundColor Green

@@ -16,6 +16,7 @@ dist/macos/
 !dist/*.zip
 !dist/*.tar.gz
 !dist/*.dmg
+!dist/*.msi
 !dist/README.md
 
 # Logs & temp files
