@@ -651,7 +651,7 @@ private struct FirewallDetailView: View {
             let service = SMAppService.daemon(plistName: "com.postureflow.helper.plist")
             do {
                 try service.register()
-                Task { @MainActor in
+                Task<Void, Never> { @MainActor in
                     await state.syncWithDaemon()
                 }
             } catch {
@@ -860,7 +860,7 @@ private struct HardwareDefenseDetailView: View {
                         .controlSize(.small)
 
                         Button(state.sensorPrivacyReport.emergencyKillActive ? "Restore All Sensors" : "🚨 Emergency Kill Switch") {
-                            Task {
+                            Task<Void, Never> {
                                 if state.sensorPrivacyReport.emergencyKillActive {
                                     await state.restoreSensors()
                                 } else {

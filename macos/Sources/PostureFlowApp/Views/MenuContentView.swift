@@ -105,13 +105,11 @@ public struct MenuContentView: View {
 
             // MARK: - 3. Sensor Privacy Emergency Action
             Button {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                    Task {
-                        if state.sensorPrivacyReport.emergencyKillActive {
-                            await state.restoreSensors()
-                        } else {
-                            await state.engageEmergencyKillSwitch()
-                        }
+                Task<Void, Never> {
+                    if state.sensorPrivacyReport.emergencyKillActive {
+                        await state.restoreSensors()
+                    } else {
+                        await state.engageEmergencyKillSwitch()
                     }
                 }
             } label: {
@@ -173,7 +171,7 @@ public struct MenuContentView: View {
                 Divider().frame(height: 12)
 
                 Button {
-                    Task {
+                    Task<Void, Never> {
                         _ = try? await XPCClient.shared.restoreDefaults()
                         NSApplication.shared.terminate(nil)
                     }

@@ -74,7 +74,7 @@ public final class PostureStateStore: ObservableObject {
         )
 
         setupEngines()
-        Task {
+        Task<Void, Never> {
             await syncWithDaemon()
         }
     }
