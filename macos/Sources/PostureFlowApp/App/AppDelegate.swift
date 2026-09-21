@@ -6,6 +6,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: NSWindow?
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
+        // Load security shield application icon if available
+        if let iconPath = Bundle.main.path(forResource: "AppIcon", ofType: "icns") ??
+                          Bundle.main.path(forResource: "AppIcon", ofType: "png"),
+           let iconImage = NSImage(contentsOfFile: iconPath) {
+            NSApp.applicationIconImage = iconImage
+        }
+
         // Run as menu bar accessory (hides Dock icon)
         NSApp.setActivationPolicy(.accessory)
     }

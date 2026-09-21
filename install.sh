@@ -12,12 +12,17 @@ RED="\033[0;31m"
 CYAN="\033[0;36m"
 NC="\033[0m"
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    echo -e "${CYAN}[*] macOS detected. Delegating to macos/install.sh...${NC}"
+    exec "$SCRIPT_DIR/macos/install.sh" "$@"
+fi
+
 if [ "$EUID" -ne 0 ]; then
     echo -e "${RED}[-] Please run with sudo: sudo ./install.sh${NC}"
     exit 1
 fi
-
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 DEV_MODE=0
 if [[ "$1" == "--dev" ]] || [[ "$1" == "-d" ]]; then

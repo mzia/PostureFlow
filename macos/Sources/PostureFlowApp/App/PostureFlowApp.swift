@@ -19,7 +19,7 @@ struct PostureFlowApp: App {
             .padding(10)
             .frame(width: 340)
         } label: {
-            Image(systemName: state.currentMode.sfSymbol)
+            Image(systemName: state.menuBarShieldIcon)
                 .symbolRenderingMode(.hierarchical)
         }
         .menuBarExtraStyle(.window)

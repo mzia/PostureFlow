@@ -2,15 +2,18 @@
 
 > **Dynamic security posture, Apple Silicon power management, and lifestyle workflow orchestrator for macOS.**
 
-PostureFlow for macOS brings the contextual security and power-scaling features of PostureFlow Linux to macOS (Ventura 13, Sonoma 14, and Sequoia 15+) and Apple Silicon MacBooks (M1/M2/M3/M4).
+PostureFlow for macOS brings the contextual security and power-scaling features of PostureFlow Linux to macOS (Ventura 13, Sonoma 14, Sequoia 15, and macOS 27) and Apple Silicon MacBooks (M1/M2/M3/M4).
 
 ---
 
 ## 🌟 Key Features on macOS
 
+* **🛡️ Native Security Shield Icon & Menu Bar Indicator:**
+  - **Apple HIG App Icon:** High-resolution multi-layer security shield icon (`AppIcon.icns` / `.png`) with obsidian glass squircle, metallic bevels, and glowing cyber key emblem.
+  - **Dynamic Menu Bar Shield:** Real-time posture-aware security shield in the macOS menu bar (`checkmark.shield.fill` for Home, `shield.lefthalf.filled` for Work, `shield.checkerboard` for Dev, `lock.shield.fill` for Travel lockdown).
 * **Native macOS HIG Design Standards:**
   - **Control Center Style Popover:** SwiftUI `MenuBarExtra` styled to match macOS Control Center with 2x2 interactive posture tiles, dynamic SF Symbols, and real-time score pills.
-  - **Ventura / Sonoma / Sequoia System Settings:** Multi-section `NavigationSplitView` with iconic square-rounded Settings icon badges, native grouped forms (`.formStyle(.grouped)`), and smooth spring transitions.
+  - **Ventura / Sonoma / Sequoia / macOS 27 System Settings:** Multi-section `NavigationSplitView` with iconic square-rounded Settings icon badges, native grouped forms (`.formStyle(.grouped)`), and smooth spring transitions.
   - **Authentic macOS Typography & Materials:** System vibrancy (`.ultraThinMaterial`, `NSColor.controlBackgroundColor`), high-contrast score badges, and keyboard shortcuts (`⌘,`, `⌘Q`).
 * **🔑 YubiKey Hardware Presence Tethering ("Zero-Trust Physical Token"):** Continuous USB monitoring detecting token ejection to instantly lock the macOS desktop (`pmset displaysleepnow`), demote to Travel lockdown, and auto-restore on re-insert.
 * **🪤 Honeypot Port Traps & LAN Port Scan Defense:** High-performance `Network.framework` `NWListener` decoy sockets on ports 2222, 8080, and 4450 with autonomous peer IP bans via `pfctl`.
@@ -31,6 +34,9 @@ macos/
 ├── Package.swift                             # Swift Package Manager manifest
 ├── README.md                                 # macOS documentation & developer guide
 ├── Resources/
+│   ├── AppIcon.icns                          # Native macOS multi-resolution security shield icon
+│   ├── AppIcon.png                           # 1024x1024 master icon asset
+│   ├── Info.plist                            # App bundle manifest with CFBundleIconFile
 │   ├── com.postureflow.helper.plist          # Launchd privileged helper service definition
 │   └── PostureFlow.entitlements              # App security & network entitlements
 ├── Sources/

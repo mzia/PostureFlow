@@ -30,7 +30,7 @@ public struct StatusCardView: View {
                         .frame(width: 38, height: 38)
                         .shadow(color: Color(hex: state.currentMode.accentColorHex).opacity(0.35), radius: 6, x: 0, y: 2)
 
-                    Image(systemName: state.currentMode.sfSymbol)
+                    Image(systemName: state.currentMode.shieldSymbol)
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.white)
                 }

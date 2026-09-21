@@ -5,7 +5,7 @@
 [![Rust: 1.80+](https://img.shields.io/badge/Rust-1.80%2B-red.svg)](https://www.rust-lang.org)
 [![Swift: 5.9+](https://img.shields.io/badge/Swift-5.9%2B-orange.svg)](macos/README.md)
 [![OS: Linux](https://img.shields.io/badge/Linux-Pop!__OS%20%7C%20COSMIC%20%7C%20Ubuntu-orange.svg)](https://system76.com/pop)
-[![OS: macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Ventura%2B-black.svg)](macos/README.md)
+[![OS: macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Ventura%20--%20macOS%2027-black.svg)](macos/README.md)
 [![Hardware: Framework Laptop](https://img.shields.io/badge/Hardware-Framework%20Laptop-black.svg)](https://frame.work)
 
 > **Context-aware security posture, hardware power, and developer service orchestrator for Linux and macOS.**
@@ -41,11 +41,14 @@ git clone https://github.com/mzia/PostureFlow.git && cd PostureFlow
 sudo ./install.sh
 ```
 
-#### macOS (Apple Silicon & Intel)
+#### macOS (macOS 27, Sequoia, Sonoma, Ventura)
 ```bash
-cd macos
-swift build
-swift run PostureFlowApp   # Launches the native menu bar extra app
+# Automated Installer (CLI + Native MenuBar App with Security Shield Icon)
+./install.sh         # User install (CLI in ~/.local/bin, App in ~/Applications)
+sudo ./install.sh    # Full system install with privileged pfctl firewall daemon
+
+# Launch the native MenuBarExtra companion
+open ~/Applications/PostureFlow.app
 ```
 *See the [macOS Documentation & Architecture](macos/README.md) for Touch ID, PF firewall, and Apple Silicon power controls.*
 
@@ -82,7 +85,7 @@ postureflow mcp               # Launch zero-trust Model Context Protocol (MCP) s
 
 ### 1. Panel Applet & Menu Bar Extra
 Available in the **COSMIC top panel**, **Ubuntu/GNOME tray**, and **macOS Menu Bar**:
-* **Live Dynamic Icon:** Switches visual badges automatically (🏠 Hearth, 💼 Workstation, 💻 Code prompt `<_>`, ✈️ Shackle).
+* **Live Dynamic Shield Icon:** On macOS, features a native multi-resolution security shield (`AppIcon.icns`) and posture-aware menu bar shield badges (`checkmark.shield.fill`, `shield.lefthalf.filled`, `shield.checkerboard`, `lock.shield.fill`).
 * **Hover Status:** Instant tooltip showing active posture, security score, active SSID, and trigger state.
 * **1-Click Switching:** Left-click to instantly cycle postures with Polkit/Touch ID cached authentication.
 * **Direct Launcher:** Quick access to the visual Settings GUI and Port Inspector.
