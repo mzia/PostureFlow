@@ -244,8 +244,8 @@ fn read_screen_idle_delay() -> u32 {
         if o.status.success() {
             let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
             // Output format: "uint32 900" or "900"
-            let num_str: String = s.chars().filter(|c| c.is_ascii_digit()).collect();
-            if let Ok(n) = num_str.parse() {
+            let num_part = s.split_whitespace().last().unwrap_or(&s);
+            if let Ok(n) = num_part.parse() {
                 return n;
             }
         }

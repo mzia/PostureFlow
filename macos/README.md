@@ -8,7 +8,10 @@ PostureFlow for macOS brings the contextual security and power-scaling features 
 
 ## 🌟 Key Features on macOS
 
-* **SwiftUI `MenuBarExtra`:** Lives natively in the top menu bar status area with dynamic SF Symbols and profile accent colors.
+* **Native macOS HIG Design Standards:**
+  - **Control Center Style Popover:** SwiftUI `MenuBarExtra` styled to match macOS Control Center with 2x2 interactive posture tiles, dynamic SF Symbols, and real-time score pills.
+  - **Ventura / Sonoma / Sequoia System Settings:** Multi-section `NavigationSplitView` with iconic square-rounded Settings icon badges, native grouped forms (`.formStyle(.grouped)`), and smooth spring transitions.
+  - **Authentic macOS Typography & Materials:** System vibrancy (`.ultraThinMaterial`, `NSColor.controlBackgroundColor`), high-contrast score badges, and keyboard shortcuts (`⌘,`, `⌘Q`).
 * **🔑 YubiKey Hardware Presence Tethering ("Zero-Trust Physical Token"):** Continuous USB monitoring detecting token ejection to instantly lock the macOS desktop (`pmset displaysleepnow`), demote to Travel lockdown, and auto-restore on re-insert.
 * **🪤 Honeypot Port Traps & LAN Port Scan Defense:** High-performance `Network.framework` `NWListener` decoy sockets on ports 2222, 8080, and 4450 with autonomous peer IP bans via `pfctl`.
 * **🎙️ Camera, Microphone & Sensor Hardware Privacy Kill Switch:** Programmatic input volume muting, per-profile privacy enforcement, and 1-click Emergency Kill Switch.
@@ -128,3 +131,27 @@ load anchor "com.postureflow" from "/etc/pf.anchors/com.postureflow"
 | 💼 **Work** | VPN + IPP | Blocks LAN dev ports; passes `utun*` (VPN) and CUPS (`631`) | High Performance |
 | 💻 **Dev** | Developer Ports | Passes local dev ports (`3000`, `5173`, `8080`, `8000`) | Standard |
 | ✈️ **Travel** | Lockdown | Drops ICMP ping (Stealth); blocks all inbound | Low Power Mode |
+
+---
+
+## 🤖 Model Context Protocol (MCP) Integration for AI Assistants
+
+PostureFlow includes a native, zero-trust **Model Context Protocol (MCP)** server over `stdio` for AI assistants (Claude Desktop, Cursor, Antigravity):
+
+### Features & Zero-Trust Safety
+* **Telemetry & Audits:** Read-only queries for active posture, open listening ports, 100-point security grade, and sensor privacy states.
+* **One-Way Security Ratchet:** AI assistants can escalate posture (e.g. `Dev` $\rightarrow$ `Travel` lockdown) or engage emergency screen lock, but are **strictly blocked from downgrading defenses** (`Travel` $\rightarrow$ `Home`/`Dev`) to prevent prompt injection attacks.
+
+### Configuration in Claude Desktop / Cursor
+Add to your `claude_desktop_config.json` or Cursor MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "postureflow": {
+      "command": "/usr/local/bin/postureflow",
+      "args": ["--mcp"]
+    }
+  }
+}
+```

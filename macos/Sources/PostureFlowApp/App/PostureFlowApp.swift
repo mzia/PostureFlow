@@ -8,14 +8,19 @@ struct PostureFlowApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            StatusCardView(state: state)
-            Divider()
-            MenuContentView(state: state) {
-                appDelegate.openSettingsWindow(state: state)
+            VStack(spacing: 0) {
+                StatusCardView(state: state)
+                    .padding(.bottom, 6)
+
+                MenuContentView(state: state) {
+                    appDelegate.openSettingsWindow(state: state)
+                }
             }
+            .padding(10)
+            .frame(width: 340)
         } label: {
             Image(systemName: state.currentMode.sfSymbol)
-                .symbolRenderingMode(.multicolor)
+                .symbolRenderingMode(.hierarchical)
         }
         .menuBarExtraStyle(.window)
     }

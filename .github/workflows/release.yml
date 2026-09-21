@@ -38,7 +38,12 @@ jobs:
       - name: Create GitHub Release and Upload .deb Asset
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.deb
+          files: |
+            dist/*.deb
+            dist/*.dmg
+            dist/*.msi
+            dist/*.zip
+            dist/*.tar.gz
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Product Id="*" Name="PostureFlow" Language="1033" Version="1.0.0.0" Manufacturer="M. Zia" UpgradeCode="7E9E8D7A-6B5C-4F3E-2D1C-0B9A8F7E6D5C">
-    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+  <Product Id="*" Name="PostureFlow" Language="1033" Version="1.0.1.0" Manufacturer="M. Zia" UpgradeCode="7E9E8D7A-6B5C-4F3E-2D1C-0B9A8F7E6D5C">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="x64" />
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
     <Feature Id="ProductFeature" Title="PostureFlow" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
+      <ComponentRef Id="ApplicationShortcut" />
     </Feature>
   </Product>
 
@@ -22,13 +23,22 @@
   </Fragment>
 
   <Fragment>
-    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
-      <Component Id="PostureFlowGui" Guid="A1B2C3D4-E5F6-7890-1234-56789ABCDEF0">
-        <File Id="PostureFlowGuiExe" Source="target\release\postureflow-gui.exe" KeyPath="yes">
-          <Shortcut Id="ApplicationStartMenuShortcut" Directory="ApplicationProgramsFolder" Name="PostureFlow Cockpit" WorkingDirectory="INSTALLFOLDER" Advertise="yes" />
-        </File>
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="ApplicationShortcut" Guid="C3D4E5F6-A7B8-9012-3456-7890ABCDEF12">
+        <Shortcut Id="ApplicationStartMenuShortcut"
+                  Name="PostureFlow Cockpit"
+                  Target="[INSTALLFOLDER]postureflow-gui.exe"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\PostureFlow" Name="installed" Type="integer" Value="1" KeyPath="yes" />
       </Component>
-      <Component Id="PostureFlowDaemon" Guid="B2C3D4E5-F6A7-8901-2345-6789ABCDEF01">
+    </DirectoryRef>
+
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Component Id="PostureFlowGui" Guid="A1B2C3D4-E5F6-7890-1234-56789ABCDEF0" Win64="yes">
+        <File Id="PostureFlowGuiExe" Source="target\release\postureflow-gui.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="PostureFlowDaemon" Guid="B2C3D4E5-F6A7-8901-2345-6789ABCDEF01" Win64="yes">
         <File Id="PostureFlowDaemonExe" Source="target\release\postureflow-daemon.exe" KeyPath="yes" />
       </Component>
     </ComponentGroup>

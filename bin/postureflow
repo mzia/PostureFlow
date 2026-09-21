@@ -154,11 +154,13 @@ show_status() {
     echo -e "${BOLD}--- Network & Firewall (UFW) ---${NC}"
     if command -v ufw >/dev/null 2>&1; then
         local ufw_status
-        ufw_status=$(ufw status 2>/dev/null || echo "inactive")
+        ufw_status=$(ufw status 2>/dev/null || true)
         if echo "$ufw_status" | grep -qi "Status: active"; then
             echo -e "  • UFW Firewall:        ${GREEN}Active${NC}"
             echo "  • Configured Rules:"
             echo "$ufw_status" | grep -v "Status: active" | sed 's/^/      /' || true
+        elif systemctl is-active ufw 2>/dev/null | grep -q "^active$"; then
+            echo -e "  • UFW Firewall:        ${GREEN}Active (Enforced)${NC}"
         else
             echo -e "  • UFW Firewall:        ${RED}Inactive / Disabled${NC}"
         fi
@@ -565,6 +567,16 @@ case "${1:-}" in
         fi
         reset_to_defaults
         exit 0
+        ;;
+    mcp|--mcp)
+        if [ -x "$SCRIPT_DIR/../target/release/postureflow-daemon" ]; then
+            exec "$SCRIPT_DIR/../target/release/postureflow-daemon" --mcp
+        elif command -v postureflow-daemon >/dev/null 2>&1; then
+            exec postureflow-daemon --mcp
+        else
+            log_error "postureflow-daemon binary required for MCP server"
+            exit 1
+        fi
         ;;
     *)
         show_status

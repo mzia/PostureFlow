@@ -103,6 +103,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Request well-known session bus name
     let _ = session_conn.request_name("io.github.mzia.PostureFlow.Applet").await;
 
+    // Automatically reap child processes to prevent defunct zombies
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGCHLD, libc::SIG_IGN);
+    }
+    let mut last_gui_spawn = std::time::Instant::now() - std::time::Duration::from_secs(10);
+
     // Register with StatusNotifierWatcher
     register_with_watcher(&session_conn).await;
 
@@ -185,6 +192,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         &format!("Profile switched to [{}]", new_profile.as_str().to_uppercase()),
                         new_profile.icon_name(),
                     ).await;
+                    let _ = postureflow::theme::apply_posture_theme(new_profile.as_str());
                 }
             }
 
@@ -217,6 +225,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                     &format!("Active profile is now [{}]", target.as_str().to_uppercase()),
                                     target.icon_name(),
                                 ).await;
+                                let _ = postureflow::theme::apply_posture_theme(target.as_str());
                                 println!("[+] Successfully activated [{}] mode!", target.as_str().to_uppercase());
                             }
                             Err(e) => {
@@ -304,13 +313,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     }
 
                     MenuAction::OpenInspector => {
+                        let now = std::time::Instant::now();
+                        if now.duration_since(last_gui_spawn) < std::time::Duration::from_millis(750) {
+                            println!("[*] Ignoring duplicate OpenInspector request (debounced).");
+                            continue;
+                        }
+                        last_gui_spawn = now;
                         println!("[*] Launching postureflow-gui in Port Inspector view...");
-                        let launched = std::process::Command::new("postureflow-gui")
-                            .arg("--tab")
-                            .arg("ports")
-                            .spawn();
-                        if launched.is_err() {
-                            let _ = std::process::Command::new("postureflow-gui").spawn();
+                        let mut cmd = std::process::Command::new("postureflow-gui");
+                        cmd.arg("--tab").arg("ports");
+                        if let Ok(mut child) = cmd.spawn() {
+                            tokio::task::spawn_blocking(move || {
+                                let _ = child.wait();
+                            });
                         }
                     }
 
@@ -337,15 +352,32 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     }
 
                     MenuAction::OpenGui => {
+                        let now = std::time::Instant::now();
+                        if now.duration_since(last_gui_spawn) < std::time::Duration::from_millis(750) {
+                            println!("[*] Ignoring duplicate OpenGui request (debounced).");
+                            continue;
+                        }
+                        last_gui_spawn = now;
                         println!("[*] Launching postureflow-gui...");
-                        let launched = std::process::Command::new("postureflow-gui").spawn();
-                        if let Err(e) = launched {
-                            eprintln!("[-] Could not launch postureflow-gui from PATH ({}). Trying exe directory...", e);
-                            if let Ok(exe) = std::env::current_exe() {
-                                if let Some(dir) = exe.parent() {
-                                    let candidate = dir.join("postureflow-gui");
-                                    if candidate.exists() {
-                                        let _ = std::process::Command::new(candidate).spawn();
+                        let mut cmd = std::process::Command::new("postureflow-gui");
+                        match cmd.spawn() {
+                            Ok(mut child) => {
+                                tokio::task::spawn_blocking(move || {
+                                    let _ = child.wait();
+                                });
+                            }
+                            Err(e) => {
+                                eprintln!("[-] Could not launch postureflow-gui from PATH ({}). Trying exe directory...", e);
+                                if let Ok(exe) = std::env::current_exe() {
+                                    if let Some(dir) = exe.parent() {
+                                        let candidate = dir.join("postureflow-gui");
+                                        if candidate.exists() {
+                                            if let Ok(mut child) = std::process::Command::new(candidate).spawn() {
+                                                tokio::task::spawn_blocking(move || {
+                                                    let _ = child.wait();
+                                                });
+                                            }
+                                        }
                                     }
                                 }
                             }
