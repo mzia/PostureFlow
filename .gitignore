@@ -10,6 +10,7 @@
 
 # Build artifacts
 target/
+.build/
 dist/windows-x64/
 dist/macos/
 !dist/*.deb

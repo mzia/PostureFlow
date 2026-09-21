@@ -65,6 +65,20 @@ public enum PostureMode: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
+    /// Dedicated security shield SF Symbol for macOS menu bar and security telemetry
+    public var shieldSymbol: String {
+        switch self {
+        case .home:
+            return "checkmark.shield.fill"
+        case .work:
+            return "shield.lefthalf.filled"
+        case .dev:
+            return "shield.checkerboard"
+        case .travel:
+            return "lock.shield.fill"
+        }
+    }
+
     /// Hex accent color matching PostureFlow Linux indicators
     public var accentColorHex: String {
         switch self {

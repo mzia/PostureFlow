@@ -35,6 +35,11 @@ public final class PostureStateStore: ObservableObject {
     @Published public var sensorPrivacyReport: SensorPrivacyReport = SensorPrivacyReport()
     @Published public var proximityRSSI: Int? = nil
 
+    /// Current security shield icon for menu bar display
+    public var menuBarShieldIcon: String {
+        return currentMode.shieldSymbol
+    }
+
     private var config: PostureConfig
     private let xpcClient = XPCClient.shared
     private let autoFlow = AutoFlowMonitor()

@@ -19,13 +19,16 @@ fi
 
 # 1. Terminate and unregister background service
 echo -e "${YELLOW}[1/4] Stopping background service...${NC}"
+launchctl bootout system /Library/LaunchDaemons/com.postureflow.helper.plist 2>/dev/null || true
 launchctl bootout system /Library/LaunchDaemons/io.github.mzia.postureflow.helper.plist 2>/dev/null || true
-rm -f /Library/LaunchDaemons/io.github.mzia.postureflow.helper.plist
-rm -f /Library/PrivilegedHelperTools/io.github.mzia.postureflow.helper
+rm -f /Library/LaunchDaemons/com.postureflow.helper.plist /Library/LaunchDaemons/io.github.mzia.postureflow.helper.plist
+rm -f /Library/PrivilegedHelperTools/com.postureflow.helper /Library/PrivilegedHelperTools/io.github.mzia.postureflow.helper
 
 # 2. Flush PostureFlow packet filter anchors
 echo -e "${YELLOW}[2/4] Resetting pfctl firewall rules...${NC}"
+pfctl -a "com.postureflow/*" -F all 2>/dev/null || true
 pfctl -a "postureflow/*" -F all 2>/dev/null || true
+rm -f /etc/pf.anchors/com.postureflow 2>/dev/null || true
 
 # 3. Remove CLI binary and App
 echo -e "${YELLOW}[3/4] Removing binaries and Application...${NC}"

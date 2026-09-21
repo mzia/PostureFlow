@@ -16,6 +16,13 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    echo -e "${CYAN}[*] macOS detected. Delegating to macos/uninstall.sh...${NC}"
+    exec "$SCRIPT_DIR/macos/uninstall.sh" "$@"
+fi
+
 echo -e "\n${BOLD}${CYAN}=== Uninstalling PostureFlow ===${NC}"
 
 # Stop systemd services if running

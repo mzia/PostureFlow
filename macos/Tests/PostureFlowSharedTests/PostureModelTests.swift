@@ -16,6 +16,11 @@ final class PostureModelTests: XCTestCase {
         XCTAssertEqual(PostureMode.dev.sfSymbol, "chevron.left.forwardslash.chevron.right")
         XCTAssertEqual(PostureMode.travel.sfSymbol, "airplane")
 
+        XCTAssertEqual(PostureMode.home.shieldSymbol, "checkmark.shield.fill")
+        XCTAssertEqual(PostureMode.work.shieldSymbol, "shield.lefthalf.filled")
+        XCTAssertEqual(PostureMode.dev.shieldSymbol, "shield.checkerboard")
+        XCTAssertEqual(PostureMode.travel.shieldSymbol, "lock.shield.fill")
+
         XCTAssertTrue(PostureMode.travel.enablesLowPowerMode)
         XCTAssertFalse(PostureMode.work.enablesLowPowerMode)
         XCTAssertFalse(PostureMode.home.enablesLowPowerMode)
