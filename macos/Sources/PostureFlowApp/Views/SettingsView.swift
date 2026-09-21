@@ -162,10 +162,8 @@ private struct OverviewDetailView: View {
                     Picker("Active Posture", selection: Binding(
                         get: { state.currentMode },
                         set: { newMode in
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                                Task { @MainActor in
-                                    await state.switchTo(newMode)
-                                }
+                            Task<Void, Never> {
+                                await state.switchTo(newMode)
                             }
                         }
                     )) {

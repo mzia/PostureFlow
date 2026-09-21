@@ -27,10 +27,8 @@ public struct MenuContentView: View {
                             mode: mode,
                             isSelected: state.currentMode == mode,
                             onSelect: {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                                    Task { @MainActor in
-                                        await state.switchTo(mode)
-                                    }
+                                Task<Void, Never> {
+                                    await state.switchTo(mode)
                                 }
                             }
                         )

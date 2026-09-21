@@ -85,7 +85,7 @@ jobs:
           if ($candle -and $light) {
             Write-Host "==> Compiling MSI installer with WiX..." -ForegroundColor Cyan
             & $candle windows/installer/PostureFlow.wxs -out target/PostureFlow.wixobj
-            & $light target/PostureFlow.wixobj -out dist/PostureFlow-1.0.1-x64.msi -ext WixUIExtension
+            & $light target/PostureFlow.wixobj -out dist/PostureFlow-1.0.1-x64.msi -ext WixUIExtension -sice:ICE64 -sice:ICE80
             Write-Host "==> MSI successfully generated at dist/PostureFlow-1.0.1-x64.msi" -ForegroundColor Green
           } else {
             Write-Warning "WiX Toolset not found. Skipping MSI build."
