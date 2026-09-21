@@ -568,6 +568,16 @@ case "${1:-}" in
         reset_to_defaults
         exit 0
         ;;
+    mcp|--mcp)
+        if [ -x "$SCRIPT_DIR/../target/release/postureflow-daemon" ]; then
+            exec "$SCRIPT_DIR/../target/release/postureflow-daemon" --mcp
+        elif command -v postureflow-daemon >/dev/null 2>&1; then
+            exec postureflow-daemon --mcp
+        else
+            log_error "postureflow-daemon binary required for MCP server"
+            exit 1
+        fi
+        ;;
     *)
         show_status
         echo ""

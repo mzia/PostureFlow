@@ -24,6 +24,7 @@ struct PostureFlowCLI {
             --tether-status  Display connected YubiKeys and physical token tethering status
             --honeypot-status Display armed decoy trap ports and intrusion incident history
             --restore        Flush anchor rules and restore default network state
+            --mcp, mcp       Launch native Model Context Protocol (MCP) server over stdio
             --help, -h       Show this help message
         """)
     }
@@ -163,6 +164,10 @@ struct PostureFlowCLI {
             updated.activeProfile = .work
             try? updated.save()
             print("✔ Reset active profile to default (Work).")
+
+        case "--mcp", "mcp":
+            PostureFlowMCPServer.runStdioServer()
+            exit(0)
 
         default:
             print("Error: Unknown argument '\(command)'")

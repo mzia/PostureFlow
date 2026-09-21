@@ -131,3 +131,27 @@ load anchor "com.postureflow" from "/etc/pf.anchors/com.postureflow"
 | 💼 **Work** | VPN + IPP | Blocks LAN dev ports; passes `utun*` (VPN) and CUPS (`631`) | High Performance |
 | 💻 **Dev** | Developer Ports | Passes local dev ports (`3000`, `5173`, `8080`, `8000`) | Standard |
 | ✈️ **Travel** | Lockdown | Drops ICMP ping (Stealth); blocks all inbound | Low Power Mode |
+
+---
+
+## 🤖 Model Context Protocol (MCP) Integration for AI Assistants
+
+PostureFlow includes a native, zero-trust **Model Context Protocol (MCP)** server over `stdio` for AI assistants (Claude Desktop, Cursor, Antigravity):
+
+### Features & Zero-Trust Safety
+* **Telemetry & Audits:** Read-only queries for active posture, open listening ports, 100-point security grade, and sensor privacy states.
+* **One-Way Security Ratchet:** AI assistants can escalate posture (e.g. `Dev` $\rightarrow$ `Travel` lockdown) or engage emergency screen lock, but are **strictly blocked from downgrading defenses** (`Travel` $\rightarrow$ `Home`/`Dev`) to prevent prompt injection attacks.
+
+### Configuration in Claude Desktop / Cursor
+Add to your `claude_desktop_config.json` or Cursor MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "postureflow": {
+      "command": "/usr/local/bin/postureflow",
+      "args": ["--mcp"]
+    }
+  }
+}
+```

@@ -96,11 +96,20 @@ struct Cli {
     /// Display decoy honeypot trap ports and recent intrusion incidents
     #[arg(long)]
     honeypot_status: bool,
+
+    /// Run native Model Context Protocol (MCP) zero-trust server over stdio
+    #[arg(long)]
+    mcp: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
+
+    if cli.mcp {
+        postureflow::mcp::run_stdio_server()?;
+        return Ok(());
+    }
 
     if cli.daemon {
         run_daemon(cli.session_bus).await?;

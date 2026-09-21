@@ -116,4 +116,18 @@ public enum PostureMode: String, CaseIterable, Identifiable, Codable, Sendable {
             return "Block all unsolicited inbound; drop ICMP ping"
         }
     }
+
+    /// Zero-Trust security rank (higher = more restrictive / secure)
+    public var securityRank: Int {
+        switch self {
+        case .travel:
+            return 4
+        case .work:
+            return 3
+        case .home:
+            return 2
+        case .dev:
+            return 1
+        }
+    }
 }

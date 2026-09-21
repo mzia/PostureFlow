@@ -73,6 +73,7 @@ postureflow --status          # View current posture, firewall policy & battery 
 postureflow --score           # Real-time Security Posture Score (0-100%, Grade A+ to F)
 postureflow --ports           # Inspect listening sockets, exposure scope & process owners
 postureflow --autoflow        # Inspect autonomous Wi-Fi SSID & VPN auto-shift rules
+postureflow mcp               # Launch zero-trust Model Context Protocol (MCP) server over stdio
 ```
 
 ---
@@ -261,6 +262,31 @@ make snyk
 
 * **Automated CI/CD:** GitHub Actions ([`.github/workflows/snyk.yml`](.github/workflows/snyk.yml)) audits dependencies on every PR and runs weekly scheduled scans.
 * **SARIF Integration:** Security findings upload directly to GitHub Code Scanning when `SNYK_TOKEN` is configured in repository secrets.
+
+---
+
+## 🤖 Zero-Trust Model Context Protocol (MCP) Server
+
+PostureFlow includes a native, lightweight **Model Context Protocol (MCP)** server over standard I/O (`stdio`), enabling AI coding assistants (Claude Desktop, Cursor, Antigravity) to securely query and coordinate system security postures.
+
+### Security Invariants & Protections
+* **Telemetry by Default:** Read-only queries for active posture (`get_posture_status`), 100-point security grade (`get_security_audit`), listening sockets (`inspect_listening_ports`), and hardware privacy states (`get_sensor_privacy_status`).
+* **One-Way Security Ratchet:** AI assistants can escalate defense postures (`Dev` $\rightarrow$ `Work` $\rightarrow$ `Travel`) or trigger emergency lockdown (`engage_security_lockdown`).
+* **Prompt Injection Defense:** Downgrading to a less restrictive posture (`Travel` $\rightarrow$ `Dev`/`Home`) is **strictly blocked** by the protocol. Lowering security requires physical confirmation on the host OS via CLI or applet.
+
+### Adding PostureFlow to Claude Desktop or Cursor
+Add to your `claude_desktop_config.json` or Cursor MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "postureflow": {
+      "command": "postureflow",
+      "args": ["mcp"]
+    }
+  }
+}
+```
 
 ---
 
