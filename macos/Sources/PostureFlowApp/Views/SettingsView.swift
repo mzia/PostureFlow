@@ -357,6 +357,66 @@ private struct AutoFlowDetailView: View {
                     .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
                     .cornerRadius(8)
                 }
+                // Anti-Evil Twin & Gateway Fingerprint Telemetry
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("ANTI-EVIL TWIN & GATEWAY MAC FINGERPRINTING")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.secondary)
+                            Text("Protects against rogue access points advertising identical SSIDs with different BSSIDs or spoofed ARP gateways.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        if let ssid = state.connectedSSID, !ssid.isEmpty {
+                            Button("Trust Current Network") {
+                                state.trustCurrentNetwork(targetMode: state.currentMode)
+                            }
+                            .controlSize(.small)
+                        }
+                    }
+
+                    if let alert = state.evilTwinAlert {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.red)
+                            Text(alert)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.red)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.red.opacity(0.12))
+                        .cornerRadius(8)
+                    }
+
+                    HStack(spacing: 16) {
+                        VStack(alignment: .leading) {
+                            Text("Current BSSID")
+                                .font(.caption2).foregroundColor(.secondary)
+                            Text(state.connectedBSSID ?? "None (CoreWLAN)")
+                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        }
+                        Divider().frame(height: 24)
+                        VStack(alignment: .leading) {
+                            Text("Gateway MAC (ARP)")
+                                .font(.caption2).foregroundColor(.secondary)
+                            Text(state.connectedGatewayMAC ?? "None (Unresolved)")
+                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        }
+                        Divider().frame(height: 24)
+                        VStack(alignment: .leading) {
+                            Text("Trusted Fingerprints")
+                                .font(.caption2).foregroundColor(.secondary)
+                            Text("\(state.config.trustedNetworks.count) Registered")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                    }
+                    .padding(10)
+                    .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+                    .cornerRadius(8)
+                }
                 .padding(14)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -626,6 +686,135 @@ private struct FirewallDetailView: View {
                             Text(state.currentMode == .travel ? "Enabled (Silent Drop)" : "Standard Response")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(state.currentMode == .travel ? .green : .secondary)
+                        }
+                    }
+                    .padding(12)
+                    .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+                    .cornerRadius(8)
+                }
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(NSColor.controlBackgroundColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                        )
+                )
+
+                // Encrypted DNS & Anti-Leak Shield
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("PROFILE-AWARE ENCRYPTED DNS (DOT / DOH / ANTI-LEAK)")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.secondary)
+
+                    VStack(spacing: 8) {
+                        LabeledContent("Encrypted DNS Status") {
+                            Text(state.dnsStatusReport.isEncrypted ? "DoT / DNSSEC Active" : "Standard LAN Resolver")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(state.dnsStatusReport.isEncrypted ? .green : .secondary)
+                        }
+                        Divider()
+                        LabeledContent("Anti-DNS-Leak Protection") {
+                            Text(state.dnsStatusReport.isPort53Blocked ? "Port 53 Blocked (pfctl Drop)" : "Port 53 Open")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(state.dnsStatusReport.isPort53Blocked ? .green : .secondary)
+                        }
+                        Divider()
+                        LabeledContent("DNSSEC Validation") {
+                            Text(state.dnsStatusReport.dnssecEnforced ? "Enforced (Quad9 / Cloudflare)" : "Standard")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                    }
+                    .padding(12)
+                    .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+                    .cornerRadius(8)
+                }
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(NSColor.controlBackgroundColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                        )
+                )
+
+                // Developer Credential Cloaking
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("POSTURE-AWARE CREDENTIAL CLOAKING")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.secondary)
+                            Text("Automatically purges SSH keys, revokes ~/.aws/credentials permissions, and locks password managers on leaving Dev mode.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Button("Uncloak Secrets") {
+                            state.uncloakCredentials()
+                        }
+                        .controlSize(.small)
+                    }
+
+                    VStack(spacing: 8) {
+                        LabeledContent("SSH Agent Identity Pool") {
+                            Text(state.currentMode == .dev ? "Loaded / Active" : "Purged on Exit (ssh-add -D)")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(state.currentMode == .dev ? .primary : .green)
+                        }
+                        Divider()
+                        LabeledContent("AWS Credentials (~/.aws/credentials)") {
+                            Text(state.credentialCloakStatus.isAWSCredentialsCloaked ? "Cloaked (Permissions 000)" : "Uncloaked (Permissions 600)")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(state.credentialCloakStatus.isAWSCredentialsCloaked ? .green : .primary)
+                        }
+                        Divider()
+                        LabeledContent("Password Manager Auto-Lock") {
+                            Text("1Password (op) & Bitwarden (bw)")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                    }
+                    .padding(12)
+                    .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+                    .cornerRadius(8)
+                }
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(NSColor.controlBackgroundColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                        )
+                )
+
+                // Global Shortcuts & Siri Integration
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("GLOBAL SHORTCUTS & APPLE SHORTCUTS APP")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.secondary)
+
+                    VStack(spacing: 8) {
+                        LabeledContent("Switch to Home Posture") {
+                            Text("⌃⌥⌘ 1").font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        }
+                        Divider()
+                        LabeledContent("Switch to Work Posture") {
+                            Text("⌃⌥⌘ 2").font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        }
+                        Divider()
+                        LabeledContent("Switch to Development Posture") {
+                            Text("⌃⌥⌘ 3").font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        }
+                        Divider()
+                        LabeledContent("Switch to Travel (Lockdown) Posture") {
+                            Text("⌃⌥⌘ 4").font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        }
+                        Divider()
+                        LabeledContent("Emergency Lockdown & Sensor Kill") {
+                            Text("⌃⌥⌘ K").font(.system(size: 11, weight: .semibold, design: .monospaced)).foregroundColor(.red)
                         }
                     }
                     .padding(12)

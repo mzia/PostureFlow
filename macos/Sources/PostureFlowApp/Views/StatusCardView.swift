@@ -66,6 +66,28 @@ public struct StatusCardView: View {
                 ScoreBadge(score: state.postureScore.score, grade: state.postureScore.grade, accentHex: state.currentMode.accentColorHex)
             }
 
+            // Critical Rogue AP / Evil Twin Alert
+            if state.isEvilTwinDetected {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.shield.fill")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.red)
+                    Text("ROGUE AP DETECTED: Lockdown Active")
+                        .font(.system(size: 10.5, weight: .heavy, design: .rounded))
+                        .foregroundColor(.red)
+                        .lineLimit(1)
+                    Spacer()
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(Color.red.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                )
+            }
+
             // Quick Telemetry Ribbon (Wi-Fi, VPN, and Root Helper)
             HStack(spacing: 8) {
                 // Wi-Fi Chip

@@ -10,7 +10,7 @@ public final class AutoFlowMonitor: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.postureflow.autoflow", qos: .utility)
     private let wifiClient = CWWiFiClient.shared()
 
-    public typealias NetworkChangeHandler = @Sendable (_ ssid: String?, _ isVPNActive: Bool) -> Void
+    public typealias NetworkChangeHandler = @Sendable (_ ssid: String?, _ bssid: String?, _ gatewayMAC: String?, _ isVPNActive: Bool) -> Void
     private var onNetworkChange: NetworkChangeHandler?
 
     public init() {
@@ -29,10 +29,12 @@ public final class AutoFlowMonitor: @unchecked Sendable {
                 interface.name.hasPrefix("utun") || interface.type == .other
             }
 
-            // Retrieve current Wi-Fi SSID
+            // Retrieve current Wi-Fi SSID, BSSID, and Gateway MAC
             let ssid = self.getCurrentSSID()
+            let bssid = self.getCurrentBSSID()
+            let gatewayMAC = AntiEvilTwinDetector.resolveGatewayMAC()
 
-            self.onNetworkChange?(ssid, isVPN)
+            self.onNetworkChange?(ssid, bssid, gatewayMAC, isVPN)
         }
 
         pathMonitor.start(queue: queue)
@@ -49,5 +51,13 @@ public final class AutoFlowMonitor: @unchecked Sendable {
             return nil
         }
         return interface.ssid()
+    }
+
+    /// Queries the currently associated Wi-Fi BSSID (Access Point MAC) using CoreWLAN
+    public func getCurrentBSSID() -> String? {
+        guard let interface = wifiClient.interface() else {
+            return nil
+        }
+        return interface.bssid()
     }
 }

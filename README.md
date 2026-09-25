@@ -115,6 +115,10 @@ postureflow-gui
 ## 🛠️ Key Capabilities
 
 * **🌐 Autonomous Network Detection (Auto-Flow):** Automatically detects trusted Home Wi-Fi, Office LAN, untrusted public hotspots, or Tailscale/WireGuard mesh tunnels and shifts profiles without user intervention.
+* **📡 Anti-Evil Twin & Gateway MAC Fingerprinting:** Detects rogue APs and Evil Twin attacks by validating Wi-Fi BSSID and ARP gateway MAC addresses against trusted profiles, engaging instant Travel lockdown.
+* **🔐 Posture-Aware Credential Cloaking:** Automatically purges decrypted SSH identities from memory (`ssh-add -D`), revokes file permissions on AWS secrets (`chmod 000 ~/.aws/credentials`), and auto-locks password managers (1Password / Bitwarden) when leaving Dev mode.
+* **🛡️ Profile-Aware Encrypted DNS (DoT / DNSSEC & Anti-Leak):** Enforces privacy DNS resolvers (Quad9 / Cloudflare) with DNSSEC. In Travel mode, automatically drops plain-text port 53 DNS queries at the packet filter level to stop DNS hijacking.
+* **⌨️ Global Shortcuts & Apple Shortcuts App:** Global keybindings (`⌃⌥⌘1-4`, `⌃⌥⌘K`) and native macOS `AppIntents` enabling Siri voice control and Apple Shortcuts App workflows.
 * **🎮 App-Aware Dynamic Triggers:** Detects when specific applications (IDEs, games, conferencing apps) launch, applies temporary profile overrides, and cleanly reverts on process termination.
 * **🐳 Developer Service Lifecycle:** Pauses Docker containers (`docker pause`) and stops dev background units when leaving Dev mode, automatically resuming them upon return.
 * **⚡ Hardware & Battery Optimization:** Controls CPU Energy Performance Preference (EPP), Framework Laptop battery charge limits (e.g. 80%), Bluetooth radio stealth, and BadUSB protection.

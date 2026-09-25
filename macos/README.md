@@ -14,6 +14,18 @@ PostureFlow for macOS brings the contextual security and power-scaling features 
 * **🛡️ Native Security Shield Icon & Menu Bar Indicator:**
   - **Apple HIG App Icon:** High-resolution multi-layer security shield icon (`AppIcon.icns` / `.png`) with obsidian glass squircle, metallic bevels, and glowing cyber key emblem.
   - **Dynamic Menu Bar Shield:** Real-time posture-aware security shield in the macOS menu bar (`checkmark.shield.fill` for Home, `shield.lefthalf.filled` for Work, `shield.checkerboard` for Dev, `lock.shield.fill` for Travel lockdown).
+* **📡 Anti-Evil Twin & BSSID Gateway Fingerprinting:**
+  - Detects rogue Wi-Fi access points and Evil Twin attacks by validating both the AP BSSID MAC and default gateway MAC address (via system ARP table) against trusted fingerprints.
+  - Automatically isolates host to Travel lockdown mode and penalizes security score upon spoofing detection.
+* **🔐 Posture-Aware Developer Credential Cloaking:**
+  - On transitioning away from Development posture, automatically purges active SSH identities (`ssh-add -D`), revokes file permissions on AWS credentials (`chmod 000 ~/.aws/credentials`), and auto-locks CLI password vaults (1Password `op` and Bitwarden `bw`).
+  - Restores access (`chmod 600`) seamlessly upon entering Dev mode or manual `--uncloak`.
+* **🌐 Profile-Aware Encrypted DNS (DoT / DoH / DNSSEC & Anti-DNS-Leak):**
+  - Enforces privacy resolvers (Quad9 `9.9.9.9` & Cloudflare `1.1.1.1`) with DNSSEC validation.
+  - In Travel lockdown mode, Packet Filter drops unencrypted plain-text DNS traffic (`block out quick proto { tcp, udp } to any port 53`) preventing captive portal or ISP DNS hijacking.
+* **⌨️ Global Shortcuts & Apple Shortcuts App Integration:**
+  - **Global Hotkeys:** Instant keyboard shortcuts anywhere in macOS (`⌃⌥⌘1` Home, `⌃⌥⌘2` Work, `⌃⌥⌘3` Dev, `⌃⌥⌘4` Travel, `⌃⌥⌘K` Emergency Lockdown).
+  - **Apple App Intents & Siri:** Full integration with the Apple Shortcuts App (`ApplyPostureIntent`, `GetPostureStatusIntent`, `EmergencyLockdownIntent`) supporting Siri voice controls and widget automation.
 * **Native macOS HIG Design Standards:**
   - **Control Center Style Popover:** SwiftUI `MenuBarExtra` styled to match macOS Control Center with 2x2 interactive posture tiles, dynamic SF Symbols, and real-time score pills.
   - **Ventura / Sonoma / Sequoia / macOS 27 System Settings:** Multi-section `NavigationSplitView` with iconic square-rounded Settings icon badges, native grouped forms (`.formStyle(.grouped)`), and smooth spring transitions.
@@ -102,6 +114,10 @@ swift test
 ```bash
 swift run postureflow --status
 swift run postureflow --score
+swift run postureflow --dns-status
+swift run postureflow --cloak-status
+swift run postureflow --uncloak
+swift run postureflow --evil-twin-check
 swift run postureflow --travel
 ```
 
