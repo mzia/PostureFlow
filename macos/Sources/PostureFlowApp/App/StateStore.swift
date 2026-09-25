@@ -35,12 +35,20 @@ public final class PostureStateStore: ObservableObject {
     @Published public var sensorPrivacyReport: SensorPrivacyReport = SensorPrivacyReport()
     @Published public var proximityRSSI: Int? = nil
 
+    // Security Suite State
+    @Published public var connectedBSSID: String? = nil
+    @Published public var connectedGatewayMAC: String? = nil
+    @Published public var evilTwinAlert: String? = nil
+    @Published public var isEvilTwinDetected: Bool = false
+    @Published public var credentialCloakStatus: CredentialCloakStatus = CredentialCloakStatus()
+    @Published public var dnsStatusReport: DNSStatusReport = DNSStatusReport()
+
     /// Current security shield icon for menu bar display
     public var menuBarShieldIcon: String {
         return currentMode.shieldSymbol
     }
 
-    private var config: PostureConfig
+    public var config: PostureConfig
     private let xpcClient = XPCClient.shared
     private let autoFlow = AutoFlowMonitor()
     private let appTriggers = AppTriggerEngine()
@@ -63,6 +71,7 @@ public final class PostureStateStore: ObservableObject {
         self.sensorPrivacyReport = SensorPrivacyController.getReport()
         self.recentHoneypotIncidents = HoneypotLedger.loadRecentIncidents()
         self.connectedYubikeys = YubikeyDetector.detectYubikeys()
+        self.dnsStatusReport = EncryptedDNSManager.evaluateDNSStatus(mode: loadedConfig.activeProfile, config: loadedConfig.encryptedDNS)
 
         // Initialize score baseline
         self.postureScore = PostureScore(
@@ -75,7 +84,10 @@ public final class PostureStateStore: ObservableObject {
             isHardwareTetherActive: loadedConfig.hardwareDefense.yubikey.enabled && !YubikeyDetector.detectYubikeys().isEmpty,
             isHoneypotActive: loadedConfig.hardwareDefense.honeypot.enabled,
             isSensorPrivacyActive: SensorPrivacyController.isEmergencyKillActive(),
-            isProximityLockActive: loadedConfig.hardwareDefense.proximity.enabled
+            isProximityLockActive: loadedConfig.hardwareDefense.proximity.enabled,
+            isEvilTwinDetected: false,
+            isEncryptedDNSActive: loadedConfig.encryptedDNS.enabled && (loadedConfig.activeProfile == .travel || loadedConfig.encryptedDNS.dnsOverTLS),
+            isCredentialCloaked: (loadedConfig.activeProfile != .dev && loadedConfig.credentialCloaking.enabled)
         )
 
         setupEngines()
@@ -86,18 +98,52 @@ public final class PostureStateStore: ObservableObject {
 
     /// Connects background engines and monitors
     private func setupEngines() {
-        // 1. Auto-Flow Network Monitor
-        autoFlow.start { [weak self] ssid, isVPN in
+        // 1. Auto-Flow Network Monitor with Anti-Evil Twin Evaluation
+        autoFlow.start { [weak self] ssid, bssid, gatewayMAC, isVPN in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 self.connectedSSID = ssid
+                self.connectedBSSID = bssid
+                self.connectedGatewayMAC = gatewayMAC
                 self.isVPNActive = isVPN
-                self.recalculateScore()
 
-                if self.autoFlowEnabled, let ssid = ssid, let mappedMode = self.config.whitelistedSSIDs[ssid] {
-                    if mappedMode != self.currentMode {
-                        self.statusMessage = "Auto-Flow: Switched to \(mappedMode.displayName) on '\(ssid)'"
-                        await self.switchTo(mappedMode)
+                // Anti-Evil Twin & BSSID Gateway Fingerprinting check
+                let evaluation = AntiEvilTwinDetector.evaluate(
+                    currentSSID: ssid,
+                    currentBSSID: bssid,
+                    currentGatewayMAC: gatewayMAC,
+                    trustedRegistry: self.config.trustedNetworks
+                )
+
+                switch evaluation {
+                case .evilTwinDetected(let s, _, _, _, _):
+                    self.isEvilTwinDetected = true
+                    let alert = "🚨 ROGUE AP / EVIL TWIN ATTACK DETECTED on '\(s)'! Spoofed BSSID or Gateway MAC. Lockdown engaged."
+                    self.evilTwinAlert = alert
+                    self.statusMessage = alert
+                    self.recalculateScore()
+                    if self.currentMode != .travel {
+                        await self.switchTo(.travel)
+                    }
+
+                case .trusted(let fingerprint):
+                    self.isEvilTwinDetected = false
+                    self.evilTwinAlert = nil
+                    self.recalculateScore()
+                    if self.autoFlowEnabled && fingerprint.targetMode != self.currentMode {
+                        self.statusMessage = "Auto-Flow: Trusted network '\(fingerprint.ssid)'. Switched to \(fingerprint.targetMode.displayName)"
+                        await self.switchTo(fingerprint.targetMode)
+                    }
+
+                case .unregistered, .disconnected:
+                    self.isEvilTwinDetected = false
+                    self.evilTwinAlert = nil
+                    self.recalculateScore()
+                    if self.autoFlowEnabled, let ssid = ssid, let mappedMode = self.config.whitelistedSSIDs[ssid] {
+                        if mappedMode != self.currentMode {
+                            self.statusMessage = "Auto-Flow: Switched to \(mappedMode.displayName) on '\(ssid)'"
+                            await self.switchTo(mappedMode)
+                        }
                     }
                 }
             }
@@ -252,10 +298,25 @@ public final class PostureStateStore: ObservableObject {
 
     /// Switches the active posture profile
     public func switchTo(_ mode: PostureMode) async {
+        let previousMode = self.currentMode
         self.currentMode = mode
         self.config.activeProfile = mode
         saveConfig()
         updateHoneypotEngine()
+
+        // Handle Posture-Aware Credential Cloaking
+        self.credentialCloakStatus = CredentialCloakEngine.handlePostureChange(
+            from: previousMode,
+            to: mode,
+            config: config.credentialCloaking
+        )
+
+        // Evaluate Profile-Aware Encrypted DNS
+        self.dnsStatusReport = EncryptedDNSManager.evaluateDNSStatus(
+            mode: mode,
+            config: config.encryptedDNS
+        )
+
         recalculateScore()
 
         do {
@@ -268,6 +329,31 @@ public final class PostureStateStore: ObservableObject {
         } catch {
             self.statusMessage = "Applied \(mode.displayName) locally (Helper unavailable)"
         }
+    }
+
+    /// Manually uncloaks developer credentials (e.g. ~/.aws/credentials permissions)
+    public func uncloakCredentials() {
+        _ = CredentialCloakEngine.setAWSCredentialsCloaked(false)
+        self.credentialCloakStatus.isAWSCredentialsCloaked = false
+        self.statusMessage = "Developer credentials uncloaked"
+        recalculateScore()
+    }
+
+    /// Registers the current Wi-Fi SSID, BSSID, and Gateway MAC as a trusted fingerprint
+    public func trustCurrentNetwork(targetMode: PostureMode) {
+        guard let ssid = connectedSSID, !ssid.isEmpty else { return }
+        let fingerprint = NetworkFingerprint(
+            ssid: ssid,
+            bssid: connectedBSSID,
+            gatewayMAC: connectedGatewayMAC,
+            targetMode: targetMode
+        )
+        self.config.trustedNetworks[ssid] = fingerprint
+        saveConfig()
+        self.isEvilTwinDetected = false
+        self.evilTwinAlert = nil
+        self.statusMessage = "Fingerprinted '\(ssid)' as trusted network for \(targetMode.displayName)"
+        recalculateScore()
     }
 
     /// Recalculates the posture score based on current system conditions
@@ -284,7 +370,10 @@ public final class PostureStateStore: ObservableObject {
             isHardwareTetherActive: hardwareDefense.yubikey.enabled && !connectedYubikeys.isEmpty,
             isHoneypotActive: hardwareDefense.honeypot.enabled,
             isSensorPrivacyActive: sensorPrivacyReport.emergencyKillActive || sensorPrivacyReport.microphoneMuted,
-            isProximityLockActive: hardwareDefense.proximity.enabled
+            isProximityLockActive: hardwareDefense.proximity.enabled,
+            isEvilTwinDetected: isEvilTwinDetected,
+            isEncryptedDNSActive: dnsStatusReport.isEncrypted,
+            isCredentialCloaked: (currentMode != .dev && config.credentialCloaking.enabled)
         )
     }
 

@@ -18,6 +18,9 @@ struct PostureFlowApp: App {
             }
             .padding(10)
             .frame(width: 340)
+            .onAppear {
+                appDelegate.setup(state: state)
+            }
         } label: {
             Image(systemName: state.menuBarShieldIcon)
                 .symbolRenderingMode(.hierarchical)

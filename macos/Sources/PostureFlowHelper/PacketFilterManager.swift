@@ -68,6 +68,8 @@ public final class PacketFilterManager {
             rules.append("block in quick proto ipv6-icmp all")
             rules.append("# Block all inbound traffic")
             rules.append("block in log all")
+            rules.append("# Anti-DNS-Leak: Drop unencrypted plain-text DNS (port 53)")
+            rules.append("block out quick proto { tcp, udp } to any port 53")
             rules.append("# Allow strictly stateful outbound traffic")
             rules.append("pass out all keep state")
         }

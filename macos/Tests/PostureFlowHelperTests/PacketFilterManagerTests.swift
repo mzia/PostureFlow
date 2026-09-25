@@ -16,6 +16,8 @@ final class PacketFilterManagerTests: XCTestCase {
         XCTAssertTrue(joined.contains("block in log all"))
         // Must pass utun+ (VPN)
         XCTAssertTrue(joined.contains("pass in quick on utun+ all"))
+        // Must drop unencrypted DNS port 53 (Anti-DNS-Leak)
+        XCTAssertTrue(joined.contains("block out quick proto { tcp, udp } to any port 53"))
     }
 
     func testDevRulesPermitDevPorts() {

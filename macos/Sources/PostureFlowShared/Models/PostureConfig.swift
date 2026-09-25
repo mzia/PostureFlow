@@ -10,6 +10,10 @@ public struct PostureConfig: Codable, Sendable {
     public var appTriggers: [String: PostureMode]
     public var devPorts: [Int]
     public var hardwareDefense: HardwareDefenseConfig
+    public var trustedNetworks: [String: NetworkFingerprint]
+    public var credentialCloaking: CredentialCloakConfig
+    public var encryptedDNS: EncryptedDNSConfig
+    public var globalShortcutsEnabled: Bool
 
     public init(
         activeProfile: PostureMode = .work,
@@ -19,7 +23,11 @@ public struct PostureConfig: Codable, Sendable {
         whitelistedSSIDs: [String: PostureMode] = [:],
         appTriggers: [String: PostureMode] = Self.defaultAppTriggers,
         devPorts: [Int] = [3000, 5173, 8000, 8080],
-        hardwareDefense: HardwareDefenseConfig = HardwareDefenseConfig()
+        hardwareDefense: HardwareDefenseConfig = HardwareDefenseConfig(),
+        trustedNetworks: [String: NetworkFingerprint] = [:],
+        credentialCloaking: CredentialCloakConfig = CredentialCloakConfig(),
+        encryptedDNS: EncryptedDNSConfig = EncryptedDNSConfig(),
+        globalShortcutsEnabled: Bool = true
     ) {
         self.activeProfile = activeProfile
         self.autoFlowEnabled = autoFlowEnabled
@@ -29,6 +37,10 @@ public struct PostureConfig: Codable, Sendable {
         self.appTriggers = appTriggers
         self.devPorts = devPorts
         self.hardwareDefense = hardwareDefense
+        self.trustedNetworks = trustedNetworks
+        self.credentialCloaking = credentialCloaking
+        self.encryptedDNS = encryptedDNS
+        self.globalShortcutsEnabled = globalShortcutsEnabled
     }
 
     /// Standard macOS bundle identifiers mapped to postures

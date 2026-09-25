@@ -22,7 +22,10 @@ struct PostureFlowCLI {
             --restore-sensors Restore microphone and media sensors to standard operation
             --sensors-status Display live microphone and sensor privacy state
             --tether-status  Display connected YubiKeys and physical token tethering status
-            --honeypot-status Display armed decoy trap ports and intrusion incident history
+            --dns-status     Display profile-aware encrypted DNS (DoT/DoH) & Anti-Leak state
+            --cloak-status   Display developer secrets cloaking state (SSH agent, AWS, vaults)
+            --uncloak        Uncloak developer credentials (~/.aws/credentials posix permissions)
+            --evil-twin-check Check current Wi-Fi BSSID & Gateway MAC against trusted fingerprints
             --restore        Flush anchor rules and restore default network state
             --mcp, mcp       Launch native Model Context Protocol (MCP) server over stdio
             --help, -h       Show this help message
@@ -79,6 +82,8 @@ struct PostureFlowCLI {
         case "--score":
             let yubikeys = YubikeyDetector.detectYubikeys()
             let isEmergency = SensorPrivacyController.isEmergencyKillActive()
+            let dnsReport = EncryptedDNSManager.evaluateDNSStatus(mode: config.activeProfile, config: config.encryptedDNS)
+            let isCloaked = (config.activeProfile != .dev && config.credentialCloaking.enabled)
             let score = PostureScore(
                 mode: config.activeProfile,
                 isFirewallActive: true,
@@ -89,7 +94,10 @@ struct PostureFlowCLI {
                 isHardwareTetherActive: config.hardwareDefense.yubikey.enabled && !yubikeys.isEmpty,
                 isHoneypotActive: config.hardwareDefense.honeypot.enabled,
                 isSensorPrivacyActive: isEmergency,
-                isProximityLockActive: config.hardwareDefense.proximity.enabled
+                isProximityLockActive: config.hardwareDefense.proximity.enabled,
+                isEvilTwinDetected: false,
+                isEncryptedDNSActive: dnsReport.isEncrypted,
+                isCredentialCloaked: isCloaked
             )
             print("PostureFlow Security Score: \(score.score)/100 (Grade: \(score.grade))")
             print("Score Breakdown:")
@@ -156,6 +164,57 @@ struct PostureFlowCLI {
             print("│ Trap Ports       : \(cfg.trapPorts.map(String.init).joined(separator: ", ").padding(toLength: 35, withPad: " ", startingAt: 0))│")
             print("│ Auto-ban via pf  : \((cfg.autoBlockOffenders ? "Enabled" : "Disabled").padding(toLength: 35, withPad: " ", startingAt: 0))│")
             print("│ Total Incidents  : \(String(incidents.count).padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("└────────────────────────────────────────────────────────┘")
+
+        case "--dns-status":
+            let report = EncryptedDNSManager.evaluateDNSStatus(mode: config.activeProfile, config: config.encryptedDNS)
+            print("┌────────────────────────────────────────────────────────┐")
+            print("│ PostureFlow macOS Profile-Aware Encrypted DNS          │")
+            print("├────────────────────────────────────────────────────────┤")
+            print("│ DNS Engine       : \((config.encryptedDNS.enabled ? "Active" : "Disabled").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Encryption Mode  : \((report.isEncrypted ? "Encrypted (DoT/DoH)" : "Standard LAN").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Anti-Leak (Pt 53): \((report.isPort53Blocked ? "BLOCKED (Dropped)" : "Open").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ DNSSEC Enforced  : \((report.dnssecEnforced ? "Enabled" : "Disabled").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Active Resolvers : \(report.activeResolvers.joined(separator: ", ").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Description      : \(report.description.padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("└────────────────────────────────────────────────────────┘")
+
+        case "--cloak-status":
+            let awsPath = CredentialCloakEngine.awsCredentialsURL.path
+            let awsExists = FileManager.default.fileExists(atPath: awsPath)
+            var awsCloaked = false
+            if awsExists, let attrs = try? FileManager.default.attributesOfItem(atPath: awsPath),
+               let perms = attrs[.posixPermissions] as? NSNumber {
+                awsCloaked = (perms.intValue == 0)
+            }
+            print("┌────────────────────────────────────────────────────────┐")
+            print("│ PostureFlow Developer Credential Cloaking              │")
+            print("├────────────────────────────────────────────────────────┤")
+            print("│ Cloak Engine     : \((config.credentialCloaking.enabled ? "Enabled" : "Disabled").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ AWS File Present : \((awsExists ? "Yes" : "No ~/.aws/credentials").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ AWS Cloaked (000): \((awsCloaked ? "CLOAKED (000)" : "Uncloaked (Readable)").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Auto-Purge SSH   : \((config.credentialCloaking.purgeSSHAgentOnLeaveDev ? "On Leave Dev" : "Disabled").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Vault Auto-Lock  : \((config.credentialCloaking.lockPasswordManagers ? "1Password / Bitwarden" : "Disabled").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("└────────────────────────────────────────────────────────┘")
+
+        case "--uncloak":
+            let success = CredentialCloakEngine.setAWSCredentialsCloaked(false)
+            if success {
+                print("✔ Restored permissions (0600) on ~/.aws/credentials. Secrets uncloaked.")
+            } else {
+                print("⚠️ Could not uncloak ~/.aws/credentials (file may not exist or permission denied).")
+            }
+
+        case "--evil-twin-check":
+            let currentGW = AntiEvilTwinDetector.resolveGatewayMAC()
+            print("┌────────────────────────────────────────────────────────┐")
+            print("│ PostureFlow Anti-Evil Twin Network Verification        │")
+            print("├────────────────────────────────────────────────────────┤")
+            print("│ Gateway MAC      : \((currentGW ?? "Unknown").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Fingerprinted APs: \(String(config.trustedNetworks.count).padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            for (ssid, fp) in config.trustedNetworks {
+                print("│   • \(ssid): BSSID=\(fp.bssid ?? "*") GW=\(fp.gatewayMAC ?? "*") [\(fp.targetMode.displayName)]")
+            }
             print("└────────────────────────────────────────────────────────┘")
 
         case "--restore":

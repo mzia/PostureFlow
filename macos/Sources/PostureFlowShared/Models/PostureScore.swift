@@ -17,7 +17,10 @@ public struct PostureScore: Codable, Sendable {
         isHardwareTetherActive: Bool = false,
         isHoneypotActive: Bool = false,
         isSensorPrivacyActive: Bool = false,
-        isProximityLockActive: Bool = false
+        isProximityLockActive: Bool = false,
+        isEvilTwinDetected: Bool = false,
+        isEncryptedDNSActive: Bool = false,
+        isCredentialCloaked: Bool = false
     ) {
         var calculatedScore = 0
         var items: [String: Int] = [:]
@@ -89,6 +92,21 @@ public struct PostureScore: Codable, Sendable {
         if isProximityLockActive {
             calculatedScore += 5
             items["Walk-Away Proximity Auto-Lock"] = 5
+        }
+
+        // 7. Network & Credential Armor Defenses
+        if isEvilTwinDetected {
+            calculatedScore -= 35
+            items["Evil Twin Rogue AP Alert"] = -35
+            recs.append("CRITICAL: Rogue Wi-Fi AP or gateway spoofing detected! Hostile perimeter lockdown engaged.")
+        }
+        if isEncryptedDNSActive {
+            calculatedScore += 5
+            items["Encrypted DNS & Anti-Leak Active"] = 5
+        }
+        if isCredentialCloaked {
+            calculatedScore += 5
+            items["Developer Credential Cloaking Active"] = 5
         }
 
         let finalScore = max(0, min(100, calculatedScore))
