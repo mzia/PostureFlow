@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 use serde::{Deserialize, Serialize};
 use crate::profile::Profile;
@@ -156,6 +157,10 @@ pub fn clean_ufw_custom_rules() {
     for (rule, _) in home_rules {
         let _ = execute("ufw", &["delete", "allow", rule]);
     }
+
+    // Clean Anti-DNS-Leak drop rules
+    let _ = execute("ufw", &["delete", "deny", "out", "53/tcp"]);
+    let _ = execute("ufw", &["delete", "deny", "out", "53/udp"]);
 }
 
 pub fn set_desktop_idle_delay(seconds: u32) {
@@ -269,6 +274,12 @@ pub fn apply_profile_config(config: &crate::config::ProfileConfig) -> Result<(),
         }
     }
 
+    // In travel profile, enforce Anti-DNS-Leak outbound port 53 drop:
+    if config.profile.id == "travel" {
+        let _ = execute("ufw", &["deny", "out", "53/tcp", "comment", "Anti-DNS-Leak"]);
+        let _ = execute("ufw", &["deny", "out", "53/udp", "comment", "Anti-DNS-Leak"]);
+    }
+
     ensure_ssh_safety();
     let _ = execute("ufw", &["--force", "enable"]);
 
@@ -324,11 +335,18 @@ pub fn apply_profile_config(config: &crate::config::ProfileConfig) -> Result<(),
 pub fn apply_lifecycle_hooks(previous: Option<&crate::config::ProfileConfig>, target: &crate::config::ProfileConfig) {
     #[cfg(unix)]
     {
-        // 1. Exiting previous profile: run on_exit command and pause dev services
+        // 1. Exiting previous profile: run on_exit command, cloak credentials if leaving dev, and pause dev services
         if let Some(prev) = previous {
             if prev.profile.id != target.profile.id {
                 if let Some(ref exit_cmd) = prev.hooks.on_exit {
                     let _ = Command::new("sh").args(["-c", exit_cmd]).spawn();
+                }
+
+                // If leaving dev profile: cloak credentials, purge ssh-agent, lock password managers
+                if prev.profile.id == "dev" {
+                    purge_ssh_agent();
+                    let _ = set_aws_credentials_cloaked(true);
+                    lock_password_managers();
                 }
 
                 // If leaving Docker-managed profile (e.g. dev) and target does not manage it, pause containers
@@ -349,7 +367,11 @@ pub fn apply_lifecycle_hooks(previous: Option<&crate::config::ProfileConfig>, ta
             }
         }
 
-        // 2. Entering target profile: resume Docker containers & start user services
+        // 2. Entering target profile: resume Docker containers, uncloak credentials, & start user services
+        if target.profile.id == "dev" {
+            let _ = set_aws_credentials_cloaked(false);
+        }
+
         if target.hooks.manage_docker == Some(true) {
             let _ = Command::new("sh")
                 .args(["-c", "if command -v docker >/dev/null 2>&1; then p=$(docker ps -q -f status=paused 2>/dev/null); if [ -n \"$p\" ]; then docker unpause $p >/dev/null 2>&1; fi; fi"])
@@ -366,6 +388,137 @@ pub fn apply_lifecycle_hooks(previous: Option<&crate::config::ProfileConfig>, ta
             let _ = Command::new("sh").args(["-c", enter_cmd]).spawn();
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CredentialCloakReport {
+    pub aws_credentials_exist: bool,
+    pub aws_cloaked: bool,
+    pub ssh_agent_active: bool,
+    pub ssh_identities_count: usize,
+    pub op_cli_available: bool,
+    pub bw_cli_available: bool,
+}
+
+pub fn aws_credentials_path() -> Option<PathBuf> {
+    if let Ok(home) = std::env::var("HOME") {
+        let p = PathBuf::from(home).join(".aws/credentials");
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    if let Ok(sudo_user) = std::env::var("SUDO_USER") {
+        let p = PathBuf::from(format!("/home/{}/.aws/credentials", sudo_user));
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    None
+}
+
+pub fn is_aws_credentials_cloaked() -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Some(path) = aws_credentials_path() {
+            if let Ok(meta) = std::fs::metadata(&path) {
+                return (meta.permissions().mode() & 0o777) == 0;
+            }
+        }
+    }
+    false
+}
+
+pub fn set_aws_credentials_cloaked(cloak: bool) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Some(path) = aws_credentials_path() {
+            let mode = if cloak { 0o000 } else { 0o600 };
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode))
+                .map_err(|e| format!("Failed to set permissions on {}: {}", path.display(), e))?;
+        }
+    }
+    Ok(())
+}
+
+pub fn purge_ssh_agent() {
+    #[cfg(unix)]
+    {
+        if let Ok(user) = std::env::var("SUDO_USER") {
+            let _ = Command::new("sudo").args(["-u", &user, "ssh-add", "-D"]).output();
+        } else {
+            let _ = Command::new("ssh-add").arg("-D").output();
+        }
+    }
+}
+
+pub fn lock_password_managers() {
+    #[cfg(unix)]
+    {
+        let target_user = std::env::var("SUDO_USER").ok();
+        let run_cmd = |binary: &str, arg: &str| {
+            if let Some(ref u) = target_user {
+                let _ = Command::new("sudo").args(["-u", u, binary, arg]).output();
+            } else {
+                let _ = Command::new(binary).arg(arg).output();
+            }
+        };
+
+        run_cmd("op", "signout");
+        run_cmd("bw", "lock");
+    }
+}
+
+pub fn get_credential_cloak_status() -> CredentialCloakReport {
+    let aws_path = aws_credentials_path();
+    let aws_exists = aws_path.is_some();
+    let aws_cloaked = is_aws_credentials_cloaked();
+
+    let mut ssh_agent_active = false;
+    let mut ssh_identities_count = 0;
+
+    #[cfg(unix)]
+    {
+        let ssh_out = if let Ok(user) = std::env::var("SUDO_USER") {
+            Command::new("sudo").args(["-u", &user, "ssh-add", "-l"]).output()
+        } else {
+            Command::new("ssh-add").arg("-l").output()
+        };
+
+        if let Ok(out) = ssh_out {
+            let s = String::from_utf8_lossy(&out.stdout);
+            if out.status.success() {
+                ssh_agent_active = true;
+                ssh_identities_count = s.lines().filter(|l| !l.trim().is_empty()).count();
+            } else if out.status.code() == Some(1) {
+                ssh_agent_active = true;
+                ssh_identities_count = 0;
+            }
+        }
+    }
+
+    let op_avail = which_binary("op").is_some();
+    let bw_avail = which_binary("bw").is_some();
+
+    CredentialCloakReport {
+        aws_credentials_exist: aws_exists,
+        aws_cloaked,
+        ssh_agent_active,
+        ssh_identities_count,
+        op_cli_available: op_avail,
+        bw_cli_available: bw_avail,
+    }
+}
+
+fn which_binary(name: &str) -> Option<PathBuf> {
+    for path in &["/usr/bin", "/usr/local/bin", "/opt/homebrew/bin", "/bin"] {
+        let p = PathBuf::from(path).join(name);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    None
 }
 
 pub fn apply_cpu_epp(preference: &str) -> Result<(), String> {
@@ -827,6 +980,9 @@ pub fn reset_to_defaults() -> Result<(), String> {
         let _ = apply_microphone_muted(false);
         let _ = apply_location_blocked(false);
 
+        // Restore developer credentials permissions (uncloak ~/.aws/credentials)
+        let _ = set_aws_credentials_cloaked(false);
+
         Ok(())
     }
 }
@@ -863,8 +1019,24 @@ pub fn get_status_report() -> String {
         let cam_status = if is_camera_blocked() { "BLOCKED (Privacy Lock)" } else { "Enabled / Active" };
         let mic_status = if is_microphone_muted() { "MUTED (Hardware Lock)" } else { "Active / Unmuted" };
 
+        let cloak_rep = get_credential_cloak_status();
+        let cloak_summary = if cloak_rep.aws_cloaked {
+            "CLOAKED (000 - Protected)".to_string()
+        } else if cloak_rep.aws_credentials_exist {
+            "Active (0600 - Developer Access)".to_string()
+        } else {
+            "No ~/.aws/credentials found".to_string()
+        };
+        let ssh_summary = if !cloak_rep.ssh_agent_active {
+            "Inactive".to_string()
+        } else if cloak_rep.ssh_identities_count == 0 {
+            "Purged (0 identities in memory)".to_string()
+        } else {
+            format!("Loaded ({} identities active)", cloak_rep.ssh_identities_count)
+        };
+
         format!(
-            "Active Profile: {}\nCPU EPP Mode:   {}\nUSB Security:   {}\nBluetooth:      {}\nCamera Privacy: {}\nMic Privacy:    {}\nDNS Privacy:    {}\nptrace_scope:   {}\ninotify watches:{}\nvm.max_map_count: {}\nUFW Status:\n{}",
+            "Active Profile: {}\nCPU EPP Mode:   {}\nUSB Security:   {}\nBluetooth:      {}\nCamera Privacy: {}\nMic Privacy:    {}\nDNS Privacy:    {}\nCredential Cloak:{}\nSSH Agent:      {}\nptrace_scope:   {}\ninotify watches:{}\nvm.max_map_count: {}\nUFW Status:\n{}",
             profile.to_uppercase(),
             cpu_epp,
             usb_lockdown,
@@ -872,6 +1044,8 @@ pub fn get_status_report() -> String {
             cam_status,
             mic_status,
             dns_summary,
+            cloak_summary,
+            ssh_summary,
             ptrace,
             inotify,
             map_count,
@@ -936,6 +1110,21 @@ mod tests {
         };
         let json = serde_json::to_string(&rep).unwrap();
         let deserialized: DnsStatusReport = serde_json::from_str(&json).unwrap();
+        assert_eq!(rep, deserialized);
+    }
+
+    #[test]
+    fn test_credential_cloak_report_serialization() {
+        let rep = CredentialCloakReport {
+            aws_credentials_exist: true,
+            aws_cloaked: true,
+            ssh_agent_active: true,
+            ssh_identities_count: 2,
+            op_cli_available: false,
+            bw_cli_available: true,
+        };
+        let json = serde_json::to_string(&rep).unwrap();
+        let deserialized: CredentialCloakReport = serde_json::from_str(&json).unwrap();
         assert_eq!(rep, deserialized);
     }
 }

@@ -1483,6 +1483,8 @@ impl GuiApp {
                 if ui.button("➕ Add Rule").clicked() && !self.new_rule_ssid.is_empty() {
                     self.autoflow_config.rules.push(NetworkRule {
                         ssid: Some(self.new_rule_ssid.trim().to_string()),
+                        bssid: None,
+                        gateway_mac: None,
                         interface: None,
                         profile: self.new_rule_profile.trim().to_lowercase(),
                         comment: Some(self.new_rule_comment.trim().to_string()),

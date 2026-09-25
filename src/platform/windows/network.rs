@@ -56,6 +56,8 @@ pub fn detect_active_networks_windows() -> ActiveNetworkInfo {
     ActiveNetworkInfo {
         primary_type,
         current_ssid,
+        current_bssid: None,
+        current_gateway_mac: None,
         active_vpn,
         vpn_tunnels,
         active_devices,

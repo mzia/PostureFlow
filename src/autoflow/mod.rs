@@ -46,18 +46,24 @@ impl Default for AutoFlowConfig {
             rules: vec![
                 NetworkRule {
                     ssid: Some("HomeNetwork".to_string()),
+                    bssid: None,
+                    gateway_mac: None,
                     interface: None,
                     profile: "home".to_string(),
                     comment: Some("Home Wi-Fi".to_string()),
                 },
                 NetworkRule {
                     ssid: Some("WorkOffice_Secure".to_string()),
+                    bssid: None,
+                    gateway_mac: None,
                     interface: None,
                     profile: "work".to_string(),
                     comment: Some("Work Headquarters".to_string()),
                 },
                 NetworkRule {
                     ssid: None,
+                    bssid: None,
+                    gateway_mac: None,
                     interface: Some("eth0".to_string()),
                     profile: "dev".to_string(),
                     comment: Some("Wired Lab Bench".to_string()),
@@ -80,6 +86,10 @@ pub struct NetworkRule {
     #[serde(default)]
     pub ssid: Option<String>,
     #[serde(default)]
+    pub bssid: Option<String>,
+    #[serde(default)]
+    pub gateway_mac: Option<String>,
+    #[serde(default)]
     pub interface: Option<String>,
     pub profile: String,
     #[serde(default)]
@@ -90,6 +100,10 @@ pub struct NetworkRule {
 pub struct ActiveNetworkInfo {
     pub primary_type: String,            // "wifi", "ethernet", "vpn", "none"
     pub current_ssid: Option<String>,
+    #[serde(default)]
+    pub current_bssid: Option<String>,
+    #[serde(default)]
+    pub current_gateway_mac: Option<String>,
     pub active_vpn: Option<String>,
     #[serde(default)]
     pub vpn_tunnels: Vec<String>,
@@ -136,6 +150,8 @@ pub fn load_autoflow_config() -> AutoFlowConfig {
                 0,
                 NetworkRule {
                     ssid: Some(ssid.clone()),
+                    bssid: None,
+                    gateway_mac: None,
                     interface: None,
                     profile: "home".to_string(),
                     comment: Some(format!("Current Wi-Fi: {}", ssid)),
@@ -252,14 +268,175 @@ pub fn detect_active_networks() -> ActiveNetworkInfo {
             }
         }
 
+        let current_bssid = detect_current_bssid();
+        let current_gateway_mac = detect_current_gateway_mac();
+
         ActiveNetworkInfo {
             primary_type,
             current_ssid,
+            current_bssid,
+            current_gateway_mac,
             active_vpn,
             vpn_tunnels,
             active_devices,
         }
     }
+}
+
+/// Detect the active Wi-Fi BSSID using nmcli
+pub fn detect_current_bssid() -> Option<String> {
+    #[cfg(unix)]
+    {
+        if let Ok(out) = Command::new("nmcli")
+            .args(["-t", "-f", "active,bssid", "dev", "wifi"])
+            .output()
+        {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout);
+                for line in s.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("yes:") || trimmed.starts_with("*:") {
+                        if let Some((_, bssid_part)) = trimmed.split_once(':') {
+                            let clean = bssid_part.replace('\\', "").trim().to_string();
+                            if clean.contains(':') && clean.len() >= 11 {
+                                return Some(clean);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Detect default gateway MAC address from /proc/net/arp or ip neigh
+pub fn detect_current_gateway_mac() -> Option<String> {
+    #[cfg(unix)]
+    {
+        // 1. Direct Linux /proc/net/arp read
+        if let Ok(content) = std::fs::read_to_string("/proc/net/arp") {
+            let gw_ip = detect_default_gateway_ip();
+            for line in content.lines().skip(1) {
+                let cols: Vec<&str> = line.split_whitespace().collect();
+                if cols.len() >= 4 {
+                    let ip = cols[0];
+                    let mac = cols[3];
+                    if mac.contains(':') && mac != "00:00:00:00:00:00" {
+                        if let Some(ref target_ip) = gw_ip {
+                            if ip == target_ip {
+                                return Some(mac.to_string());
+                            }
+                        } else if cols.len() >= 6 {
+                            let dev = cols[5];
+                            if dev.starts_with("wl") || dev.starts_with("en") || dev.starts_with("eth") {
+                                return Some(mac.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Fallback: ip neigh show
+        if let Ok(out) = Command::new("ip").args(["neigh", "show"]).output() {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout);
+                for line in s.lines() {
+                    if line.contains("router") || line.contains("REACHABLE") || line.contains("DELAY") {
+                        let parts: Vec<&str> = line.split_whitespace().collect();
+                        if let Some(pos) = parts.iter().position(|&x| x == "lladdr") {
+                            if pos + 1 < parts.len() {
+                                let mac = parts[pos + 1];
+                                if mac.contains(':') {
+                                    return Some(mac.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Fallback: arp -an
+        if let Ok(out) = Command::new("arp").args(["-an"]).output() {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout);
+                for line in s.lines() {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if let Some(pos) = parts.iter().position(|&x| x == "at") {
+                        if pos + 1 < parts.len() {
+                            let mac = parts[pos + 1];
+                            if mac.contains(':') && mac != "(incomplete)" && mac != "ff:ff:ff:ff:ff:ff" {
+                                return Some(mac.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn detect_default_gateway_ip() -> Option<String> {
+    #[cfg(unix)]
+    {
+        if let Ok(out) = Command::new("ip").args(["route", "show", "default"]).output() {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout);
+                let parts: Vec<&str> = s.split_whitespace().collect();
+                if let Some(pos) = parts.iter().position(|&x| x == "via") {
+                    if pos + 1 < parts.len() {
+                        return Some(parts[pos + 1].to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Check if the current Wi-Fi network exhibits Evil Twin characteristics
+/// (SSID matches a trusted rule, but BSSID or Gateway MAC mismatches).
+pub fn check_evil_twin(config: &AutoFlowConfig, net: &ActiveNetworkInfo) -> Option<String> {
+    let ssid = net.current_ssid.as_ref()?;
+
+    for rule in &config.rules {
+        if let Some(ref rule_ssid) = rule.ssid {
+            if rule_ssid.eq_ignore_ascii_case(ssid) {
+                // Check BSSID fingerprint
+                if let Some(ref exp_bssid) = rule.bssid {
+                    if let Some(ref act_bssid) = net.current_bssid {
+                        let exp = exp_bssid.to_lowercase().replace('-', ":");
+                        let act = act_bssid.to_lowercase().replace('-', ":");
+                        if !exp.is_empty() && !act.is_empty() && exp != act {
+                            return Some(format!(
+                                "EVIL TWIN DETECTED: SSID '{}' advertised by rogue BSSID '{}' (expected '{}')",
+                                ssid, act_bssid, exp_bssid
+                            ));
+                        }
+                    }
+                }
+
+                // Check Gateway MAC fingerprint
+                if let Some(ref exp_gw) = rule.gateway_mac {
+                    if let Some(ref act_gw) = net.current_gateway_mac {
+                        let exp = exp_gw.to_lowercase().replace('-', ":");
+                        let act = act_gw.to_lowercase().replace('-', ":");
+                        if !exp.is_empty() && !act.is_empty() && exp != act {
+                            return Some(format!(
+                                "EVIL TWIN DETECTED: Gateway MAC mismatch on SSID '{}' (actual '{}', expected '{}')",
+                                ssid, act_gw, exp_gw
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
 }
 
 /// Evaluate active network against configured rules and determine appropriate posture
@@ -292,8 +469,13 @@ pub fn evaluate_posture(config: &AutoFlowConfig, net: &ActiveNetworkInfo) -> Opt
         }
     }
 
-    // 2. Wi-Fi SSID Matching
+    // 3. Wi-Fi SSID & Anti-Evil Twin Matching
     if let Some(ref ssid) = net.current_ssid {
+        // If an Evil Twin is detected, immediately enforce travel lockdown
+        if check_evil_twin(config, net).is_some() {
+            return Some("travel".to_string());
+        }
+
         for rule in &config.rules {
             if let Some(ref rule_ssid) = rule.ssid {
                 if rule_ssid.eq_ignore_ascii_case(ssid) {
@@ -308,7 +490,7 @@ pub fn evaluate_posture(config: &AutoFlowConfig, net: &ActiveNetworkInfo) -> Opt
         }
     }
 
-    // 3. Interface matching (e.g. eth0, docker0)
+    // 4. Interface matching (e.g. eth0, docker0)
     for dev in &net.active_devices {
         for rule in &config.rules {
             if let Some(ref rule_iface) = rule.interface {
@@ -331,6 +513,8 @@ mod tests {
         let mut config = AutoFlowConfig::default();
         config.rules.push(NetworkRule {
             ssid: Some("CoffeeShop-Guest".to_string()),
+            bssid: None,
+            gateway_mac: None,
             interface: None,
             profile: "travel".to_string(),
             comment: None,
@@ -340,6 +524,8 @@ mod tests {
         let net1 = ActiveNetworkInfo {
             primary_type: "wifi".to_string(),
             current_ssid: Some("CoffeeShop-Guest".to_string()),
+            current_bssid: None,
+            current_gateway_mac: None,
             active_vpn: None,
             vpn_tunnels: Vec::new(),
             active_devices: vec!["wlp2s0".to_string()],
@@ -350,6 +536,8 @@ mod tests {
         let net2 = ActiveNetworkInfo {
             primary_type: "vpn".to_string(),
             current_ssid: Some("HomeNetwork".to_string()),
+            current_bssid: None,
+            current_gateway_mac: None,
             active_vpn: Some("WorkVPN".to_string()),
             vpn_tunnels: vec!["tun0".to_string()],
             active_devices: vec!["tun0".to_string()],
@@ -360,6 +548,8 @@ mod tests {
         let net3 = ActiveNetworkInfo {
             primary_type: "wifi".to_string(),
             current_ssid: Some("Airport-Public-Free".to_string()),
+            current_bssid: None,
+            current_gateway_mac: None,
             active_vpn: None,
             vpn_tunnels: Vec::new(),
             active_devices: vec!["wlp2s0".to_string()],
@@ -370,10 +560,79 @@ mod tests {
         let net4 = ActiveNetworkInfo {
             primary_type: "vpn".to_string(),
             current_ssid: Some("HomeNetwork".to_string()),
+            current_bssid: None,
+            current_gateway_mac: None,
             active_vpn: Some("tailscale0".to_string()),
             vpn_tunnels: vec!["tailscale0".to_string()],
             active_devices: vec!["wlp2s0".to_string(), "tailscale0".to_string()],
         };
         assert_eq!(evaluate_posture(&config, &net4), Some("dev".to_string()));
+    }
+
+    #[test]
+    fn test_anti_evil_twin_bssid_mismatch_locks_to_travel() {
+        let mut config = AutoFlowConfig::default();
+        config.rules.push(NetworkRule {
+            ssid: Some("CorporateOffice".to_string()),
+            bssid: Some("aa:bb:cc:dd:ee:ff".to_string()),
+            gateway_mac: None,
+            interface: None,
+            profile: "work".to_string(),
+            comment: Some("Legit AP".to_string()),
+        });
+
+        // 1. Matching BSSID: allows work profile
+        let legit_net = ActiveNetworkInfo {
+            primary_type: "wifi".to_string(),
+            current_ssid: Some("CorporateOffice".to_string()),
+            current_bssid: Some("AA:BB:CC:DD:EE:FF".to_string()),
+            current_gateway_mac: None,
+            active_vpn: None,
+            vpn_tunnels: Vec::new(),
+            active_devices: vec!["wlp2s0".to_string()],
+        };
+        assert!(check_evil_twin(&config, &legit_net).is_none());
+        assert_eq!(evaluate_posture(&config, &legit_net), Some("work".to_string()));
+
+        // 2. Rogue BSSID: triggers evil twin detection and forces travel lockdown
+        let rogue_net = ActiveNetworkInfo {
+            primary_type: "wifi".to_string(),
+            current_ssid: Some("CorporateOffice".to_string()),
+            current_bssid: Some("11:22:33:44:55:66".to_string()),
+            current_gateway_mac: None,
+            active_vpn: None,
+            vpn_tunnels: Vec::new(),
+            active_devices: vec!["wlp2s0".to_string()],
+        };
+        let alert = check_evil_twin(&config, &rogue_net);
+        assert!(alert.is_some());
+        assert!(alert.unwrap().contains("rogue BSSID '11:22:33:44:55:66'"));
+        assert_eq!(evaluate_posture(&config, &rogue_net), Some("travel".to_string()));
+    }
+
+    #[test]
+    fn test_anti_evil_twin_gateway_mac_mismatch_locks_to_travel() {
+        let mut config = AutoFlowConfig::default();
+        config.rules.push(NetworkRule {
+            ssid: Some("HomeNetwork".to_string()),
+            bssid: None,
+            gateway_mac: Some("00:11:22:33:44:55".to_string()),
+            interface: None,
+            profile: "home".to_string(),
+            comment: Some("Trusted router".to_string()),
+        });
+
+        // Rogue gateway MAC on legitimate SSID
+        let rogue_gw = ActiveNetworkInfo {
+            primary_type: "wifi".to_string(),
+            current_ssid: Some("HomeNetwork".to_string()),
+            current_bssid: None,
+            current_gateway_mac: Some("99:88:77:66:55:44".to_string()),
+            active_vpn: None,
+            vpn_tunnels: Vec::new(),
+            active_devices: vec!["wlp2s0".to_string()],
+        };
+        assert!(check_evil_twin(&config, &rogue_gw).is_some());
+        assert_eq!(evaluate_posture(&config, &rogue_gw), Some("travel".to_string()));
     }
 }

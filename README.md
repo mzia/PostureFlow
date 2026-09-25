@@ -79,6 +79,10 @@ postureflow --status          # View current posture, firewall policy & battery 
 postureflow --score           # Real-time Security Posture Score (0-100%, Grade A+ to F)
 postureflow --ports           # Inspect listening sockets, exposure scope & process owners
 postureflow --autoflow        # Inspect autonomous Wi-Fi SSID & VPN auto-shift rules
+postureflow --evil-twin-check # Verify Wi-Fi BSSID and default gateway MAC fingerprints
+postureflow --cloak-status    # Inspect developer credential cloaking (AWS, SSH, vaults)
+postureflow --uncloak         # Restore ~/.aws/credentials permissions (0600)
+postureflow --dns-status      # Inspect DNS-over-TLS encryption & Anti-DNS-Leak rules
 postureflow mcp               # Launch zero-trust Model Context Protocol (MCP) server over stdio
 ```
 

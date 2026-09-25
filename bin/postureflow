@@ -101,6 +101,153 @@ clean_ufw_custom_rules() {
     ufw delete allow 5353/udp >/dev/null 2>&1 || true
     ufw delete allow 1900/udp >/dev/null 2>&1 || true
     ufw delete allow 631/tcp >/dev/null 2>&1 || true
+
+    # Clean Anti-DNS-Leak rules
+    ufw delete deny out 53/tcp >/dev/null 2>&1 || true
+    ufw delete deny out 53/udp >/dev/null 2>&1 || true
+}
+
+get_user_home() {
+    local target_user="${SUDO_USER:-$USER}"
+    if [ -n "$target_user" ] && [ "$target_user" != "root" ]; then
+        eval echo "~$target_user"
+    else
+        echo "$HOME"
+    fi
+}
+
+cloak_credentials() {
+    local home_dir
+    home_dir=$(get_user_home)
+    local aws_cred="$home_dir/.aws/credentials"
+    if [ -f "$aws_cred" ]; then
+        chmod 000 "$aws_cred" 2>/dev/null || true
+        log_info "Cloaked AWS credentials: chmod 000 applied to $aws_cred"
+    fi
+}
+
+uncloak_credentials() {
+    local home_dir
+    home_dir=$(get_user_home)
+    local aws_cred="$home_dir/.aws/credentials"
+    if [ -f "$aws_cred" ]; then
+        chmod 600 "$aws_cred" 2>/dev/null || true
+        log_success "Uncloaked AWS credentials: permissions restored to 0600 on $aws_cred"
+    fi
+}
+
+purge_ssh_agent() {
+    local target_user="${SUDO_USER:-$USER}"
+    if [ -n "$target_user" ] && [ "$target_user" != "root" ] && [ "$EUID" -eq 0 ]; then
+        sudo -u "$target_user" ssh-add -D >/dev/null 2>&1 || true
+    else
+        ssh-add -D >/dev/null 2>&1 || true
+    fi
+    log_info "Purged decrypted identities from ssh-agent memory pool."
+}
+
+lock_password_managers() {
+    local target_user="${SUDO_USER:-$USER}"
+    local runner=""
+    if [ -n "$target_user" ] && [ "$target_user" != "root" ] && [ "$EUID" -eq 0 ]; then
+        runner="sudo -u $target_user"
+    fi
+
+    if command -v op >/dev/null 2>&1; then
+        $runner op signout >/dev/null 2>&1 || true
+        log_info "1Password CLI signed out / locked."
+    fi
+    if command -v bw >/dev/null 2>&1; then
+        $runner bw lock >/dev/null 2>&1 || true
+        log_info "Bitwarden CLI locked."
+    fi
+}
+
+show_cloak_status() {
+    log_title "Developer Credential Cloaking Status"
+    local home_dir
+    home_dir=$(get_user_home)
+    local aws_cred="$home_dir/.aws/credentials"
+    if [ -f "$aws_cred" ]; then
+        local perms
+        perms=$(stat -c "%a" "$aws_cred" 2>/dev/null || stat -f "%Lp" "$aws_cred" 2>/dev/null || echo "unknown")
+        if [ "$perms" = "0" ] || [ "$perms" = "000" ]; then
+            echo -e "  • AWS Credentials ($aws_cred): ${RED}${BOLD}🔒 CLOAKED (000 - Protected)${NC}"
+        else
+            echo -e "  • AWS Credentials ($aws_cred): ${GREEN}${BOLD}🟢 Active ($perms - Developer Access)${NC}"
+        fi
+    else
+        echo -e "  • AWS Credentials: ${YELLOW}Not found ($aws_cred missing)${NC}"
+    fi
+
+    local target_user="${SUDO_USER:-$USER}"
+    local runner=""
+    if [ -n "$target_user" ] && [ "$target_user" != "root" ] && [ "$EUID" -eq 0 ]; then
+        runner="sudo -u $target_user"
+    fi
+
+    if $runner ssh-add -l >/dev/null 2>&1; then
+        local count
+        count=$($runner ssh-add -l 2>/dev/null | wc -l | tr -d ' ')
+        echo -e "  • SSH Agent:       ${GREEN}${BOLD}🟢 Active ($count decrypted identities loaded)${NC}"
+    else
+        echo -e "  • SSH Agent:       ${RED}${BOLD}🔒 Purged / Inactive (0 keys in memory)${NC}"
+    fi
+
+    local op_status="Not installed"
+    local bw_status="Not installed"
+    command -v op >/dev/null 2>&1 && op_status="Installed"
+    command -v bw >/dev/null 2>&1 && bw_status="Installed"
+    echo -e "  • Password Vaults: 1Password CLI: $op_status | Bitwarden CLI: $bw_status"
+}
+
+show_dns_status() {
+    log_title "Encrypted DNS & Anti-DNS-Leak Status"
+    if command -v resolvectl >/dev/null 2>&1; then
+        local dot_status
+        dot_status=$(resolvectl status 2>/dev/null | grep -i "DNSOverTLS" || echo "DNSOverTLS: no")
+        local dnssec_status
+        dnssec_status=$(resolvectl status 2>/dev/null | grep -i "DNSSEC" || echo "DNSSEC: no")
+        echo -e "  • Systemd-Resolved DoT:    $dot_status"
+        echo -e "  • DNSSEC Validation:       $dnssec_status"
+    fi
+
+    if [ -f "/etc/systemd/resolved.conf.d/99-postureflow.conf" ]; then
+        echo -e "  • Profile Configuration:   ${GREEN}${BOLD}Managed by PostureFlow (/etc/systemd/resolved.conf.d/99-postureflow.conf)${NC}"
+    else
+        echo -e "  • Profile Configuration:   System Default (DHCP)"
+    fi
+
+    if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Anti-DNS-Leak"; then
+        echo -e "  • Anti-DNS-Leak Firewall:  ${RED}${BOLD}🔒 ENFORCED (Outbound port 53 plain-text dropped)${NC}"
+    else
+        echo -e "  • Anti-DNS-Leak Firewall:  Inactive (Standard egress allowed)"
+    fi
+}
+
+check_evil_twin() {
+    log_title "Anti-Evil Twin Wi-Fi Verification"
+    if [ -x "$SCRIPT_DIR/../target/release/postureflow-daemon" ]; then
+        "$SCRIPT_DIR/../target/release/postureflow-daemon" --evil-twin-check
+    elif command -v postureflow-daemon >/dev/null 2>&1; then
+        postureflow-daemon --evil-twin-check
+    else
+        log_info "Scanning active network parameters with nmcli..."
+        local active_wifi
+        active_wifi=$(nmcli -t -f active,ssid,bssid dev wifi 2>/dev/null | grep "^yes:" || true)
+        if [ -n "$active_wifi" ]; then
+            local ssid bssid
+            ssid=$(echo "$active_wifi" | cut -d: -f2)
+            bssid=$(echo "$active_wifi" | cut -d: -f3-)
+            echo -e "  • Active SSID:  ${BOLD}$ssid${NC}"
+            echo -e "  • Active BSSID: ${BOLD}$bssid${NC}"
+            local gw_mac
+            gw_mac=$(ip neigh show 2>/dev/null | grep "router\|REACHABLE" | awk '{print $5}' | head -n1 || echo "N/A")
+            echo -e "  • Gateway MAC:  ${BOLD}$gw_mac${NC}"
+        else
+            echo "  (No active Wi-Fi connection detected)"
+        fi
+    fi
 }
 
 show_status() {
@@ -188,6 +335,15 @@ show_status() {
 apply_home_profile() {
     log_title "Activating HOME Mode (Streaming, Gaming, Media & Sync)"
 
+    local prev
+    prev=$(get_current_profile)
+    if [ "$prev" = "dev" ]; then
+        log_info "Leaving DEV posture: cloaking credentials and purging decrypted keys..."
+        cloak_credentials
+        purge_ssh_agent
+        lock_password_managers
+    fi
+
     log_info "Configuring kernel sysctl for gaming, Proton, and streaming..."
     cat << 'EOF' > "$SYSCTL_CONF"
 kernel.yama.ptrace_scope = 1
@@ -231,6 +387,15 @@ EOF
 
 apply_work_profile() {
     log_title "Activating WORK Mode (Office, Corporate VPN & Compliance)"
+
+    local prev
+    prev=$(get_current_profile)
+    if [ "$prev" = "dev" ]; then
+        log_info "Leaving DEV posture: cloaking credentials and purging decrypted keys..."
+        cloak_credentials
+        purge_ssh_agent
+        lock_password_managers
+    fi
 
     log_info "Configuring kernel sysctl for corporate compliance..."
     cat << 'EOF' > "$SYSCTL_CONF"
@@ -336,12 +501,22 @@ EOF
     ufw --force enable >/dev/null 2>&1
 
     set_desktop_idle_delay 900
+    uncloak_credentials
     save_state "dev"
     log_success "Developer / Coding Profile is now ACTIVE!"
 }
 
 apply_travel_profile() {
     log_title "Activating TRAVEL / HARDENED Mode (Lockdown & Public Wi-Fi)"
+
+    local prev
+    prev=$(get_current_profile)
+    if [ "$prev" = "dev" ]; then
+        log_info "Leaving DEV posture: cloaking credentials and purging decrypted keys..."
+        cloak_credentials
+        purge_ssh_agent
+        lock_password_managers
+    fi
 
     if ! dpkg -l | grep -q "[ ]unattended-upgrades"; then
         log_info "Installing unattended-upgrades for automatic CVE patching..."
@@ -386,6 +561,12 @@ EOF
     ufw allow out on lo >/dev/null 2>&1 || true
 
     clean_ufw_custom_rules
+
+    # Anti-DNS-Leak: drop plaintext outbound DNS queries (port 53) on untrusted public Wi-Fi
+    log_info "Enforcing Anti-DNS-Leak: dropping outbound plaintext DNS queries (port 53)..."
+    ufw deny out 53/tcp comment "Anti-DNS-Leak" >/dev/null 2>&1 || true
+    ufw deny out 53/udp comment "Anti-DNS-Leak" >/dev/null 2>&1 || true
+
     ensure_ssh_safety
 
     ufw logging low >/dev/null 2>&1
@@ -402,6 +583,8 @@ apply_secure_profile() {
 
 reset_to_defaults() {
     log_title "Resetting Pop!_OS Security Settings to Factory Defaults"
+
+    uncloak_credentials
 
     log_info "Disabling and resetting UFW firewall..."
     if command -v ufw >/dev/null 2>&1; then
@@ -453,6 +636,10 @@ case "${1:-}" in
         echo "  --score         Calculate and display Real-Time Security Posture Score (0-100%)"
         echo "  --ports         Inspect actively listening sockets and process ownership"
         echo "  --autoflow      Display Auto-Flow network detection and configuration"
+        echo "  --evil-twin-check Scan active Wi-Fi BSSID and Gateway MAC for rogue APs"
+        echo "  --cloak-status  Display developer credential cloaking status"
+        echo "  --uncloak       Restore ~/.aws/credentials permissions (0600)"
+        echo "  --dns-status    Display encrypted DNS and Anti-DNS-Leak status"
         echo "  --triggers      Display App-Aware Dynamic Triggers rules and active app status"
         echo "  -c, --schedule  Display Circadian Schedule, active window & battery telemetry"
         echo "  --test          Run automated anti-lockout & integrity test suite"
@@ -463,6 +650,22 @@ case "${1:-}" in
         ;;
     -i|--status|--info)
         show_status
+        exit 0
+        ;;
+    --uncloak)
+        uncloak_credentials
+        exit 0
+        ;;
+    --cloak-status)
+        show_cloak_status
+        exit 0
+        ;;
+    --evil-twin-check)
+        check_evil_twin
+        exit 0
+        ;;
+    --dns-status)
+        show_dns_status
         exit 0
         ;;
     --home)
@@ -590,6 +793,10 @@ case "${1:-}" in
         echo "  postureflow --score          # Real-time Security Cockpit score"
         echo "  postureflow --ports          # Inspect listening ports & processes"
         echo "  postureflow --autoflow       # Check network detection rules"
+        echo "  postureflow --evil-twin-check# Scan Wi-Fi BSSID and Gateway for rogue APs"
+        echo "  postureflow --cloak-status   # Developer credential cloaking report"
+        echo "  postureflow --uncloak        # Restore ~/.aws/credentials (0600)"
+        echo "  postureflow --dns-status     # Encrypted DNS & Anti-DNS-Leak status"
         echo "  postureflow --triggers       # Check app-aware dynamic trigger status"
         echo "  postureflow --schedule       # Circadian time-of-day schedule & battery"
         exit 0

@@ -97,6 +97,22 @@ struct Cli {
     #[arg(long)]
     honeypot_status: bool,
 
+    /// Uncloak developer credentials (restore 0600 on ~/.aws/credentials)
+    #[arg(long)]
+    uncloak: bool,
+
+    /// Show current developer credential cloaking status (AWS, SSH-Agent, Vaults)
+    #[arg(long)]
+    cloak_status: bool,
+
+    /// Scan active Wi-Fi BSSID and default gateway MAC for rogue Evil Twin APs
+    #[arg(long)]
+    evil_twin_check: bool,
+
+    /// Show current encrypted DNS resolution status (DoT, DNSSEC)
+    #[arg(long)]
+    dns_status: bool,
+
     /// Run native Model Context Protocol (MCP) zero-trust server over stdio
     #[arg(long)]
     mcp: bool,
@@ -166,6 +182,65 @@ async fn main() -> Result<(), Box<dyn Error>> {
         for (i, inc) in incidents.iter().rev().take(10).enumerate() {
             println!("  [{}] IP: {} ➔ Port {} | Blocked: {} | {}", i + 1, inc.source_ip, inc.trap_port, if inc.blocked { "YES" } else { "NO" }, inc.description);
         }
+        println!();
+        return Ok(());
+    }
+
+    if cli.uncloak {
+        system::set_aws_credentials_cloaked(false)?;
+        println!("🔓 Developer credentials uncloaked: ~/.aws/credentials permissions restored to 0600.");
+        return Ok(());
+    }
+
+    if cli.cloak_status {
+        let rep = system::get_credential_cloak_status();
+        println!("\n=== PostureFlow Developer Credential Cloak Status ===");
+        println!("AWS Credentials:      {}",
+            if !rep.aws_credentials_exist { "Not found (~/.aws/credentials missing)" }
+            else if rep.aws_cloaked { "🔒 CLOAKED (Permissions 000 - Protected from unauthorized reads)" }
+            else { "🟢 Active (Permissions 0600 - Standard developer access)" }
+        );
+        println!("SSH Agent:            {}",
+            if !rep.ssh_agent_active { "Inactive / No daemon".to_string() }
+            else if rep.ssh_identities_count == 0 { "🔒 Purged (0 active private identities in memory)".to_string() }
+            else { format!("🟢 Active ({} decrypted identities loaded in agent memory)", rep.ssh_identities_count) }
+        );
+        println!("Password Vaults:      1Password CLI: {} | Bitwarden CLI: {}",
+            if rep.op_cli_available { "Installed" } else { "Not installed" },
+            if rep.bw_cli_available { "Installed" } else { "Not installed" }
+        );
+        println!();
+        return Ok(());
+    }
+
+    if cli.evil_twin_check {
+        let cfg = autoflow::load_autoflow_config();
+        let net = autoflow::detect_active_networks();
+        println!("\n=== PostureFlow Anti-Evil Twin Wi-Fi Verification ===");
+        println!("Detected SSID:        {}", net.current_ssid.as_deref().unwrap_or("None (Disconnected / Wired)"));
+        println!("Active BSSID:         {}", net.current_bssid.as_deref().unwrap_or("Unknown / N/A"));
+        println!("Gateway MAC:          {}", net.current_gateway_mac.as_deref().unwrap_or("Unknown / N/A"));
+
+        if let Some(alert) = autoflow::check_evil_twin(&cfg, &net) {
+            println!("\n🚨 {}", alert);
+            println!("Security Recommendation: Rogue AP detected! Run 'sudo postureflow --travel' immediately.");
+        } else if net.current_ssid.is_some() {
+            println!("\n🛡️ Network verification PASSED: BSSID and Gateway MAC match trusted fingerprints or no conflict found.");
+        } else {
+            println!("\n[*] Not connected to Wi-Fi.");
+        }
+        println!();
+        return Ok(());
+    }
+
+    if cli.dns_status {
+        let dns = system::get_dns_status();
+        println!("\n=== PostureFlow Encrypted DNS Status ===");
+        println!("Encrypted DNS:        {}", if dns.is_encrypted { "🔒 ENCRYPTED" } else { "⚠️ PLAINTEXT" });
+        println!("DNS-over-TLS (DoT):   {}", if dns.dns_over_tls.is_empty() { "Disabled" } else { &dns.dns_over_tls });
+        println!("DNSSEC Validation:    {}", if dns.dnssec.is_empty() { "Disabled" } else { &dns.dnssec });
+        println!("Managed by App:       {}", if dns.managed_by_postureflow { "YES" } else { "NO" });
+        println!("Active DNS Servers:   {}", if dns.active_servers.is_empty() { "System Default (DHCP)".to_string() } else { dns.active_servers.join(", ") });
         println!();
         return Ok(());
     }
@@ -411,9 +486,11 @@ async fn run_daemon(session_bus: bool) -> Result<(), Box<dyn Error>> {
 
             let net = autoflow::detect_active_networks();
             let network_key = format!(
-                "{}:{}:{}",
+                "{}:{}:{}:{}:{}",
                 net.primary_type,
                 net.current_ssid.as_deref().unwrap_or("none"),
+                net.current_bssid.as_deref().unwrap_or("none"),
+                net.current_gateway_mac.as_deref().unwrap_or("none"),
                 net.active_vpn.as_deref().unwrap_or("none")
             );
 
