@@ -169,8 +169,19 @@ chmod 644 /etc/apt/apt.conf.d/99-postureflow-health
 # Clean up old hook if present
 rm -f /etc/apt/apt.conf.d/99-popos-profile-health
 
-# 11. Configure User Applet Service for active desktop user
+# 11. Configure User Applet Service & Autostart for active desktop user
+install -d /etc/xdg/autostart
+if [ -f "$SCRIPT_DIR/data/io.github.mzia.PostureFlow.Applet.desktop" ]; then
+    install -m 644 "$SCRIPT_DIR/data/io.github.mzia.PostureFlow.Applet.desktop" /etc/xdg/autostart/io.github.mzia.PostureFlow.Applet.desktop
+fi
+
 if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+    USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+    if [ -d "$USER_HOME" ]; then
+        mkdir -p "$USER_HOME/.config/autostart"
+        cp -f "$SCRIPT_DIR/data/io.github.mzia.PostureFlow.Applet.desktop" "$USER_HOME/.config/autostart/"
+        chown "$SUDO_USER:" "$USER_HOME/.config/autostart/io.github.mzia.PostureFlow.Applet.desktop" 2>/dev/null || true
+    fi
     USER_UID=$(id -u "$SUDO_USER" 2>/dev/null || echo "1000")
     if [ -d "/run/user/$USER_UID" ]; then
         echo "[*] Activating PostureFlow Applet user service for '$SUDO_USER'..."

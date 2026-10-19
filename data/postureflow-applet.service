@@ -1,7 +1,7 @@
 [Unit]
 Description=PostureFlow COSMIC Panel Applet
 PartOf=graphical-session.target
-After=graphical-session.target postureflow-daemon.service
+After=graphical-session.target
 
 [Service]
 Type=simple

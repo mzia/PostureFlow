@@ -8,6 +8,7 @@ Type=Application
 Categories=System;Settings;COSMIC;
 StartupNotify=false
 NoDisplay=true
+X-GNOME-Autostart-enabled=true
 X-CosmicApplet=true
 X-CosmicHoverPopup=Auto
 X-OverflowPriority=10
