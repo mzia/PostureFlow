@@ -52,7 +52,7 @@ impl StatusNotifierItem {
 
     #[zbus(property)]
     async fn icon_theme_path(&self) -> &str {
-        "/usr/share/icons/hicolor"
+        ""
     }
 
     #[zbus(property)]

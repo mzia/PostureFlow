@@ -409,10 +409,19 @@ async fn register_with_watcher(conn: &Connection) {
         WATCHER_BUS_NAME,
     ).await {
         Ok(proxy) => {
-            let res: Result<(), _> = proxy.call("RegisterStatusNotifierItem", &(SNI_OBJECT_PATH,)).await;
-            match res {
-                Ok(()) => println!("[+] Successfully registered with COSMIC StatusNotifierWatcher!"),
-                Err(e) => eprintln!("[!] Watcher registration notice: {}", e),
+            // According to the SNI specification, RegisterStatusNotifierItem takes the bus name
+            // (or "service_name/object_path"). Passing just an object path like "/StatusNotifierItem"
+            // causes StatusNotifierWatcher (e.g. cosmic-applet-status-area) to fail or hang trying to look up
+            // "/StatusNotifierItem" as a service name.
+            let bus_name = "io.github.mzia.PostureFlow.Applet";
+            let call = async {
+                let r: Result<(), zbus::Error> = proxy.call("RegisterStatusNotifierItem", &(bus_name,)).await;
+                r
+            };
+            match tokio::time::timeout(Duration::from_secs(5), call).await {
+                Ok(Ok(())) => println!("[+] Successfully registered with COSMIC StatusNotifierWatcher!"),
+                Ok(Err(e)) => eprintln!("[!] Watcher registration notice: {}", e),
+                Err(_) => eprintln!("[!] Watcher registration call timed out after 5s (StatusNotifierWatcher may be busy)"),
             }
         }
         Err(e) => {
