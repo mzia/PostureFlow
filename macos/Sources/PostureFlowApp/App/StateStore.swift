@@ -42,6 +42,8 @@ public final class PostureStateStore: ObservableObject {
     @Published public var isEvilTwinDetected: Bool = false
     @Published public var credentialCloakStatus: CredentialCloakStatus = CredentialCloakStatus()
     @Published public var dnsStatusReport: DNSStatusReport = DNSStatusReport()
+    @Published public var updateReport: UpdateCheckReport? = nil
+    @Published public var isCheckingForUpdates: Bool = false
 
     /// Current security shield icon for menu bar display
     public var menuBarShieldIcon: String {
@@ -354,6 +356,33 @@ public final class PostureStateStore: ObservableObject {
         self.evilTwinAlert = nil
         self.statusMessage = "Fingerprinted '\(ssid)' as trusted network for \(targetMode.displayName)"
         recalculateScore()
+    }
+
+    /// Checks `origin` for cross-machine commits or updates
+    public func checkForUpdates() async {
+        self.isCheckingForUpdates = true
+        self.statusMessage = "Checking origin for updates..."
+        let report = await Task.detached {
+            UpdateChecker.checkForUpdates(fetchRemote: true)
+        }.value
+        self.updateReport = report
+        self.isCheckingForUpdates = false
+        self.statusMessage = report.summary
+    }
+
+    /// Fast-forwards local repository from `origin` while preserving uncommitted work
+    public func applyUpdate() async {
+        self.isCheckingForUpdates = true
+        self.statusMessage = "Pulling latest updates from origin..."
+        let result = await Task.detached {
+            UpdateChecker.applyUpdate()
+        }.value
+        let refreshed = await Task.detached {
+            UpdateChecker.checkForUpdates(fetchRemote: false)
+        }.value
+        self.updateReport = refreshed
+        self.isCheckingForUpdates = false
+        self.statusMessage = result.message
     }
 
     /// Recalculates the posture score based on current system conditions

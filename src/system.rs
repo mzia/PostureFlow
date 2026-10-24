@@ -1035,8 +1035,15 @@ pub fn get_status_report() -> String {
             format!("Loaded ({} identities active)", cloak_rep.ssh_identities_count)
         };
 
+        let pulsar = crate::inspector::pulsarkey::detect_pulsarkey();
+        let pulsar_summary = if pulsar.installed || pulsar.config_found {
+            pulsar.summary
+        } else {
+            "Not Installed".to_string()
+        };
+
         format!(
-            "Active Profile: {}\nCPU EPP Mode:   {}\nUSB Security:   {}\nBluetooth:      {}\nCamera Privacy: {}\nMic Privacy:    {}\nDNS Privacy:    {}\nCredential Cloak:{}\nSSH Agent:      {}\nptrace_scope:   {}\ninotify watches:{}\nvm.max_map_count: {}\nUFW Status:\n{}",
+            "Active Profile: {}\nCPU EPP Mode:   {}\nUSB Security:   {}\nBluetooth:      {}\nCamera Privacy: {}\nMic Privacy:    {}\nDNS Privacy:    {}\nCredential Cloak:{}\nSSH Agent:      {}\nPulsarKey Auth: {}\nptrace_scope:   {}\ninotify watches:{}\nvm.max_map_count: {}\nUFW Status:\n{}",
             profile.to_uppercase(),
             cpu_epp,
             usb_lockdown,
@@ -1046,6 +1053,7 @@ pub fn get_status_report() -> String {
             dns_summary,
             cloak_summary,
             ssh_summary,
+            pulsar_summary,
             ptrace,
             inotify,
             map_count,

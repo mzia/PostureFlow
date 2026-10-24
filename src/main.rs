@@ -5,7 +5,7 @@ use clap::Parser;
 use postureflow::profile::Profile;
 use postureflow::dbus::{PostureFlowService, DBUS_INTERFACE, DBUS_PATH};
 use postureflow::system;
-use postureflow::inspector::{ports, PostureScoreReport};
+use postureflow::inspector::{self, ports, PostureScoreReport};
 use postureflow::autoflow;
 use postureflow::triggers;
 use postureflow::schedule;
@@ -112,6 +112,18 @@ struct Cli {
     /// Show current encrypted DNS resolution status (DoT, DNSSEC)
     #[arg(long)]
     dns_status: bool,
+
+    /// Display detected PulsarKey FIDO2 hardware identity and PAM telemetry
+    #[arg(long, short = 'P')]
+    pulsar: bool,
+
+    /// Check GitHub / origin remote for cross-machine commits or version updates
+    #[arg(long)]
+    check_update: bool,
+
+    /// Fast-forward local repository with latest remote commits (preserving local edits)
+    #[arg(long)]
+    update: bool,
 
     /// Run native Model Context Protocol (MCP) zero-trust server over stdio
     #[arg(long)]
@@ -245,6 +257,62 @@ async fn main() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
+    if cli.pulsar {
+        let p = inspector::pulsarkey::detect_pulsarkey();
+        println!("\n=== PostureFlow & PulsarKey Hardware Identity Telemetry ===");
+        println!("Installed:            {}", if p.installed { "YES" } else { "NO" });
+        println!("Config Found:         {}", if p.config_found { "YES (~/.config/pulsarkey/config.json)" } else { "NO" });
+        println!("Auth Profile:         {}", p.profile.as_deref().unwrap_or("None"));
+        println!("Auto-Lock Setting:    {}", if p.autolock { "Enabled" } else { "Disabled" });
+        println!("Sentinel Daemon:      {}", if p.sentinel_running { "ACTIVE (Hardware presence enforced)" } else { "Inactive" });
+        println!("Applet Process:       {}", if p.applet_running { "Running" } else { "Not Running" });
+        println!("Sudo PAM (pam_u2f):   {}", if p.sudo_pam_enforced { "Enforced" } else { "Standard" });
+        println!("Greeter PAM (COSMIC): {}", if p.greeter_pam_enforced { "Enforced" } else { "Standard" });
+        println!("Polkit PAM (GUI Elev):{}", if p.polkit_pam_enforced { "Enforced" } else { "Standard" });
+        println!("Enrolled Tokens:      {}", p.registered_tokens_count);
+        println!("User Verification:    {}", if p.has_user_verification { "Active (PIN/Biometric required)" } else { "Touch only" });
+        println!("FIDO2 SSH Keys:       {}", if p.fido2_ssh_keys.is_empty() { "None detected".to_string() } else { p.fido2_ssh_keys.join(", ") });
+        println!("Cockpit Summary:      {}", p.summary);
+        println!();
+        return Ok(());
+    }
+
+    if cli.check_update {
+        println!("[*] Checking origin remote for cross-machine commits & updates...");
+        let rep = inspector::updater::check_for_updates(true);
+        println!("\n=== PostureFlow Update & Cross-Machine Sync Check ===");
+        println!("Current Version:      v{}", rep.current_version);
+        println!("Repository Path:      {}", rep.repo_path.as_deref().unwrap_or("Not found (installed binary)"));
+        println!("Active Branch:        {}", rep.branch);
+        println!("Local HEAD:           {}", rep.local_commit.as_deref().unwrap_or("N/A"));
+        println!("Remote Origin:        {}", rep.remote_commit.as_deref().unwrap_or("N/A"));
+        println!("Commits Behind:       {}", rep.commits_behind);
+        println!("Commits Ahead:        {}", rep.commits_ahead);
+        println!("Local Modified Files: {}", rep.dirty_files_count);
+        println!("Status Summary:       {}", if rep.update_available { format!("⬆️  {}", rep.summary) } else { format!("✅ {}", rep.summary) });
+        if !rep.incoming_commits.is_empty() {
+            println!("\nIncoming Commits on origin/{}:", rep.branch);
+            for c in &rep.incoming_commits {
+                println!("  • {}", c);
+            }
+            println!("\nRun 'postureflow --update' to fast-forward while preserving local changes.");
+        }
+        println!();
+        return Ok(());
+    }
+
+    if cli.update {
+        println!("[*] Pulling latest updates from origin...");
+        match inspector::updater::apply_self_update() {
+            Ok(msg) => println!("✅ {}", msg),
+            Err(err) => {
+                eprintln!("❌ Update failed: {}", err);
+                std::process::exit(1);
+            }
+        }
+        return Ok(());
+    }
+
     if cli.score {
         let report = PostureScoreReport::compute();
         println!("\n=== PostureFlow Security Cockpit ===");
@@ -254,6 +322,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         println!("  • Attack Surface:        {}/25 pts ({} public, {} local ports)", report.attack_surface_score, report.public_ports_count, report.local_ports_count);
         println!("  • Kernel Hardening:      {}/25 pts (ptrace: {}, bpf: {})", report.kernel_score, report.ptrace_scope, report.bpf_disabled);
         println!("  • Desktop & Limits:      {}/15 pts (Lock timeout: {}s)", report.limits_score, report.idle_timeout_seconds);
+        if let Some(ref p) = report.pulsarkey_status {
+            if p.installed || p.config_found {
+                println!("  • Identity & Hardware:   {}", p.summary);
+            }
+        }
 
         if !report.recommendations.is_empty() {
             println!("\nRecommendations:");

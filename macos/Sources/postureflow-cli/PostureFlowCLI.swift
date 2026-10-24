@@ -26,6 +26,8 @@ struct PostureFlowCLI {
             --cloak-status   Display developer secrets cloaking state (SSH agent, AWS, vaults)
             --uncloak        Uncloak developer credentials (~/.aws/credentials posix permissions)
             --evil-twin-check Check current Wi-Fi BSSID & Gateway MAC against trusted fingerprints
+            --check-update   Check origin/GitHub for cross-machine commits or new releases
+            --update         Fast-forward local repository with latest remote commits
             --restore        Flush anchor rules and restore default network state
             --mcp, mcp       Launch native Model Context Protocol (MCP) server over stdio
             --help, -h       Show this help message
@@ -216,6 +218,44 @@ struct PostureFlowCLI {
                 print("│   • \(ssid): BSSID=\(fp.bssid ?? "*") GW=\(fp.gatewayMAC ?? "*") [\(fp.targetMode.displayName)]")
             }
             print("└────────────────────────────────────────────────────────┘")
+
+        case "--check-update":
+            let report = UpdateChecker.checkForUpdates(fetchRemote: true)
+            print("┌────────────────────────────────────────────────────────┐")
+            print("│ PostureFlow Cross-Machine Update & Sync Check          │")
+            print("├────────────────────────────────────────────────────────┤")
+            print("│ Current Version  : \("v\(report.currentVersion)".padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Branch           : \(report.branch.padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Commits Behind   : \(String(report.commitsBehind).padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Commits Ahead    : \(String(report.commitsAhead).padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Local Dirty Files: \(String(report.dirtyFilesCount).padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("│ Status           : \((report.updateAvailable ? "UPDATE AVAILABLE" : "UP TO DATE").padding(toLength: 35, withPad: " ", startingAt: 0))│")
+            print("└────────────────────────────────────────────────────────┘")
+            if let repo = report.repoPath {
+                print("  Repository : \(repo)")
+            }
+            if let local = report.localCommit {
+                print("  Local HEAD : \(local)")
+            }
+            if let remote = report.remoteCommit {
+                print("  Remote HEAD: \(remote)")
+            }
+            if !report.incomingCommits.isEmpty {
+                print("\n  Incoming Commits on origin/\(report.branch):")
+                for commit in report.incomingCommits {
+                    print("    • \(commit)")
+                }
+                print("\n  Run 'postureflow --update' to fast-forward while preserving local changes.")
+            }
+
+        case "--update":
+            let result = UpdateChecker.applyUpdate()
+            if result.success {
+                print("✔ \(result.message)")
+            } else {
+                print("⚠️ \(result.message)")
+                exit(1)
+            }
 
         case "--restore":
             print("Restoring default network settings...")

@@ -329,6 +329,42 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         }
                     }
 
+                    MenuAction::OpenPulsarKey => {
+                        println!("[*] OpenPulsarKey action triggered from COSMIC panel applet...");
+                        let candidates = [
+                            ("pulsarkey-settings", vec![]),
+                            ("pulsarkey", vec!["applet"]),
+                            ("cosmic-term", vec!["-e", "pulsarkey"]),
+                            ("x-terminal-emulator", vec!["-e", "pulsarkey"]),
+                        ];
+                        let mut launched = false;
+                        for (cmd_name, args) in &candidates {
+                            if let Ok(mut child) = std::process::Command::new(cmd_name).args(args).spawn() {
+                                tokio::task::spawn_blocking(move || {
+                                    let _ = child.wait();
+                                });
+                                launched = true;
+                                println!("[+] Successfully launched PulsarKey via {}", cmd_name);
+                                break;
+                            }
+                        }
+
+                        if !launched {
+                            println!("[*] Graphical PulsarKey launcher unavailable; broadcasting telemetry notification...");
+                            let pulsar = postureflow::inspector::pulsarkey::detect_pulsarkey();
+                            daemon.send_notification(
+                                "PulsarKey Hardware Identity",
+                                &format!("Profile: {}\nSentinel: {}\nEnrolled Tokens: {}\nFIDO2 SSH: {}",
+                                    pulsar.profile.as_deref().unwrap_or("Detected"),
+                                    if pulsar.sentinel_running { "Armed" } else { "Standby" },
+                                    pulsar.registered_tokens_count,
+                                    if pulsar.fido2_ssh_keys.is_empty() { "None" } else { "Hardware Enclave" }
+                                ),
+                                "security-high-symbolic",
+                            ).await;
+                        }
+                    }
+
                     MenuAction::ResetDefaults => {
                         println!("[*] Resetting to Pop!_OS factory defaults...");
                         match daemon.reset_to_defaults().await {
@@ -382,6 +418,43 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 }
                             }
                         }
+                    }
+
+                    MenuAction::CheckForUpdates => {
+                        println!("[*] Checking origin remote for PostureFlow updates...");
+                        let rep = tokio::task::spawn_blocking(|| {
+                            postureflow::inspector::updater::check_for_updates(true)
+                        })
+                        .await
+                        .unwrap_or_default();
+
+                        let body = if rep.update_available {
+                            let commits_preview = rep
+                                .incoming_commits
+                                .iter()
+                                .take(3)
+                                .cloned()
+                                .collect::<Vec<_>>()
+                                .join("\n• ");
+                            format!(
+                                "{}\n• {}\nRun 'postureflow --update' to sync.",
+                                rep.summary, commits_preview
+                            )
+                        } else {
+                            rep.summary.clone()
+                        };
+
+                        daemon
+                            .send_notification(
+                                "PostureFlow Update Check",
+                                &body,
+                                if rep.update_available {
+                                    "software-update-available-symbolic"
+                                } else {
+                                    "security-high-symbolic"
+                                },
+                            )
+                            .await;
                     }
 
                     MenuAction::Quit => {

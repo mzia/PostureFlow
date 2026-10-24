@@ -642,6 +642,8 @@ case "${1:-}" in
         echo "  --dns-status    Display encrypted DNS and Anti-DNS-Leak status"
         echo "  --triggers      Display App-Aware Dynamic Triggers rules and active app status"
         echo "  -c, --schedule  Display Circadian Schedule, active window & battery telemetry"
+        echo "  --check-update  Check origin/GitHub for cross-machine commits or new releases"
+        echo "  --update        Fast-forward local repository with latest remote commits"
         echo "  --test          Run automated anti-lockout & integrity test suite"
         echo "  -r, --reset     Reset all settings back to Pop!_OS factory defaults"
         echo "  --default       Alias for --reset"
@@ -771,6 +773,79 @@ case "${1:-}" in
         reset_to_defaults
         exit 0
         ;;
+    --check-update)
+        if [ -x "$SCRIPT_DIR/../target/release/postureflow-daemon" ] && "$SCRIPT_DIR/../target/release/postureflow-daemon" --check-update 2>/dev/null; then
+            exit 0
+        elif command -v postureflow-daemon >/dev/null 2>&1 && postureflow-daemon --check-update 2>/dev/null; then
+            exit 0
+        else
+            REPO_ROOT="$SCRIPT_DIR/.."
+            log_title "PostureFlow Update & Cross-Machine Sync Check"
+            if [ -d "$REPO_ROOT/.git" ]; then
+                log_info "Fetching latest commits from origin..."
+                git -C "$REPO_ROOT" fetch origin --prune --quiet 2>/dev/null || true
+                BRANCH=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+                LOCAL_COMMIT=$(git -C "$REPO_ROOT" log -1 --format="%h (%cr) %s" HEAD 2>/dev/null || echo "N/A")
+                REMOTE_COMMIT=$(git -C "$REPO_ROOT" log -1 --format="%h (%cr) %s" "origin/$BRANCH" 2>/dev/null || echo "N/A")
+                BEHIND=$(git -C "$REPO_ROOT" rev-list --count "HEAD..origin/$BRANCH" 2>/dev/null || echo "0")
+                AHEAD=$(git -C "$REPO_ROOT" rev-list --count "origin/$BRANCH..HEAD" 2>/dev/null || echo "0")
+                DIRTY=$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+                echo -e "  • Current Version:      ${BOLD}v$VERSION${NC}"
+                echo -e "  • Active Branch:        ${BOLD}$BRANCH${NC}"
+                echo -e "  • Local HEAD:           $LOCAL_COMMIT"
+                echo -e "  • Remote Origin:        $REMOTE_COMMIT"
+                echo -e "  • Commits Behind:       $BEHIND"
+                echo -e "  • Commits Ahead:        $AHEAD"
+                echo -e "  • Uncommitted Files:    $DIRTY"
+                if [ "$BEHIND" -gt 0 ]; then
+                    log_warn "Update available: $BEHIND new commit(s) on origin/$BRANCH:"
+                    git -C "$REPO_ROOT" log "HEAD..origin/$BRANCH" --oneline -n 10
+                    echo ""
+                    log_info "Run 'postureflow --update' to fast-forward while preserving local changes."
+                else
+                    log_success "PostureFlow v$VERSION is up to date with origin/$BRANCH."
+                fi
+            else
+                log_info "PostureFlow v$VERSION installed (no local git repository found)."
+            fi
+        fi
+        exit 0
+        ;;
+    --update)
+        if [ -x "$SCRIPT_DIR/../target/release/postureflow-daemon" ] && "$SCRIPT_DIR/../target/release/postureflow-daemon" --update 2>/dev/null; then
+            exit 0
+        elif command -v postureflow-daemon >/dev/null 2>&1 && postureflow-daemon --update 2>/dev/null; then
+            exit 0
+        else
+            REPO_ROOT="$SCRIPT_DIR/.."
+            if [ -d "$REPO_ROOT/.git" ]; then
+                log_info "Checking origin for updates..."
+                git -C "$REPO_ROOT" fetch origin --prune --quiet || true
+                BRANCH=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+                BEHIND=$(git -C "$REPO_ROOT" rev-list --count "HEAD..origin/$BRANCH" 2>/dev/null || echo "0")
+                if [ "$BEHIND" -eq 0 ]; then
+                    log_success "Already up to date with origin/$BRANCH."
+                    exit 0
+                fi
+                TRACKED_DIRTY=$(git -C "$REPO_ROOT" status --porcelain -uno 2>/dev/null | wc -l | tr -d ' ')
+                if [ "$TRACKED_DIRTY" -gt 0 ]; then
+                    log_info "Stashing $TRACKED_DIRTY local tracked modification(s)..."
+                    git -C "$REPO_ROOT" stash push -m "postureflow-auto-update"
+                fi
+                log_info "Fast-forwarding PostureFlow repository from origin/$BRANCH..."
+                git -C "$REPO_ROOT" merge --ff-only "origin/$BRANCH"
+                if [ "$TRACKED_DIRTY" -gt 0 ]; then
+                    log_info "Restoring local modifications..."
+                    git -C "$REPO_ROOT" stash pop
+                fi
+                log_success "Repository updated! Run './install.sh' to deploy updated binaries."
+            else
+                log_error "Could not locate local git repository for self-update."
+                exit 1
+            fi
+        fi
+        exit 0
+        ;;
     mcp|--mcp)
         if [ -x "$SCRIPT_DIR/../target/release/postureflow-daemon" ]; then
             exec "$SCRIPT_DIR/../target/release/postureflow-daemon" --mcp
@@ -799,6 +874,8 @@ case "${1:-}" in
         echo "  postureflow --dns-status     # Encrypted DNS & Anti-DNS-Leak status"
         echo "  postureflow --triggers       # Check app-aware dynamic trigger status"
         echo "  postureflow --schedule       # Circadian time-of-day schedule & battery"
+        echo "  postureflow --check-update   # Check origin for cross-machine commits"
+        echo "  postureflow --update         # Pull latest commits from origin/main"
         exit 0
         ;;
 esac

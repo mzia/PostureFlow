@@ -143,6 +143,39 @@ public struct MenuContentView: View {
 
             Divider()
 
+            // MARK: - 3b. Cross-Machine Update Check Banner (if checked or update available)
+            if let rep = state.updateReport {
+                HStack(spacing: 8) {
+                    Image(systemName: rep.updateAvailable ? "arrow.down.circle.fill" : "checkmark.circle.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(rep.updateAvailable ? .blue : .green)
+
+                    Text(rep.summary)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundColor(.primary)
+                        .lineLimit(2)
+
+                    Spacer()
+
+                    if rep.updateAvailable {
+                        Button("Pull") {
+                            Task<Void, Never> {
+                                await state.applyUpdate()
+                            }
+                        }
+                        .font(.system(size: 10, weight: .bold))
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.mini)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill((rep.updateAvailable ? Color.blue : Color.green).opacity(0.1))
+                )
+            }
+
             // MARK: - 4. macOS Standard Window Footer
             HStack {
                 Button {
@@ -151,22 +184,32 @@ public struct MenuContentView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "gearshape.fill")
                             .font(.system(size: 12))
-                        Text("Security Cockpit...")
+                        Text("Cockpit...")
                             .font(.system(size: 12, weight: .medium))
                     }
                     .foregroundColor(.primary)
                 }
                 .buttonStyle(.plain)
 
-                Spacer()
+                Divider().frame(height: 12)
 
-                Text("⌘,")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                Button {
+                    Task<Void, Never> {
+                        await state.checkForUpdates()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: state.isCheckingForUpdates ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.triangle.2.circlepath")
+                            .font(.system(size: 11))
+                        Text(state.isCheckingForUpdates ? "Checking..." : "Check Update")
+                            .font(.system(size: 11.5, weight: .medium))
+                    }
                     .foregroundColor(.secondary)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(4)
+                }
+                .buttonStyle(.plain)
+                .disabled(state.isCheckingForUpdates)
+
+                Spacer()
 
                 Divider().frame(height: 12)
 

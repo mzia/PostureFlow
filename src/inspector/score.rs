@@ -21,6 +21,8 @@ pub struct PostureScoreReport {
     pub idle_timeout_seconds: u32,
     pub recommendations: Vec<String>,
     pub public_ports: Vec<ListeningPort>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pulsarkey_status: Option<super::pulsarkey::PulsarKeyStatus>,
 }
 
 impl PostureScoreReport {
@@ -159,6 +161,40 @@ impl PostureScoreReport {
             recommendations.push("🛰️ Walk-Away Security: Bluetooth RSSI proximity auto-lock is armed.".to_string());
         }
 
+        let pulsar = super::pulsarkey::detect_pulsarkey();
+        let pulsarkey_status = if pulsar.installed || pulsar.config_found {
+            if pulsar.sentinel_running {
+                recommendations.push("🛡️ PulsarKey Sentinel: Hardware token presence auto-lock is actively armed.".to_string());
+            }
+            if let Some(ref prof) = pulsar.profile {
+                match prof.as_str() {
+                    "lockdown" => {
+                        recommendations.push("🔑 Zero-Trust Auth: PulsarKey Lockdown mode active (hardware token strictly mandatory, password fallback disabled).".to_string());
+                    }
+                    "fortress" => {
+                        recommendations.push("🔑 Hardware 2FA: PulsarKey Fortress mode active (password + hardware touch required).".to_string());
+                    }
+                    "convenience" => {
+                        let active_profile = crate::system::get_active_profile();
+                        if active_profile == "travel" {
+                            recommendations.push("⚠️ PulsarKey Notice: Active posture is Travel, but PulsarKey is in Convenience mode. Consider upgrading to Fortress or Lockdown.".to_string());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if !pulsar.fido2_ssh_keys.is_empty() {
+                recommendations.push(format!(
+                    "🗝️ Hardware SSH: {} FIDO2 hardware key(s) detected ({}).",
+                    pulsar.fido2_ssh_keys.len(),
+                    pulsar.fido2_ssh_keys.join(", ")
+                ));
+            }
+            Some(pulsar)
+        } else {
+            None
+        };
+
         let total_score = firewall_score + attack_surface_score + kernel_score + limits_score;
 
         let letter_grade = match total_score {
@@ -187,6 +223,7 @@ impl PostureScoreReport {
             idle_timeout_seconds,
             recommendations,
             public_ports,
+            pulsarkey_status,
         }
     }
 }
