@@ -115,15 +115,25 @@ impl StatusNotifierItem {
         let triggers_cfg = crate::triggers::load_triggers_config();
         let sched_cfg = crate::schedule::load_schedule_config();
 
-        let desc = format!(
-            "Mode: {}\nPosture Score: {}% [{}]\nAuto-Flow: {}\nApp Triggers: {}\nCircadian Schedule: {}\n\nClick: open menu\nScroll: cycle profile",
-            profile.display_name(),
-            score.total_score,
-            score.letter_grade,
-            if autoflow_cfg.enabled { "Active" } else { "Disabled" },
-            if triggers_cfg.enabled { "Active" } else { "Disabled" },
-            if sched_cfg.enabled { "Active" } else { "Disabled" },
-        );
+        let desc = {
+            let pulsar = crate::inspector::pulsarkey::detect_pulsarkey();
+            let pulsar_line = if pulsar.installed || pulsar.config_found {
+                format!("\nPulsarKey: {}", pulsar.summary)
+            } else {
+                String::new()
+            };
+
+            format!(
+                "Mode: {}\nPosture Score: {}% [{}]\nAuto-Flow: {}\nApp Triggers: {}\nCircadian Schedule: {}{}\n\nClick: open menu\nScroll: cycle profile",
+                profile.display_name(),
+                score.total_score,
+                score.letter_grade,
+                if autoflow_cfg.enabled { "Active" } else { "Disabled" },
+                if triggers_cfg.enabled { "Active" } else { "Disabled" },
+                if sched_cfg.enabled { "Active" } else { "Disabled" },
+                pulsar_line,
+            )
+        };
 
         (icon, pixmaps, title, desc)
     }

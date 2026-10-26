@@ -48,16 +48,14 @@ find_bin_dir() {
 
 BIN_DIR="$(find_bin_dir 2>/dev/null || echo "")"
 
-# 1. Build Swift Package if not pre-built
-if [ -z "$BIN_DIR" ]; then
-    echo -e "${YELLOW}[1/4] Building Swift release binaries...${NC}"
-    if [ "$IS_ROOT" -eq 1 ]; then
-        sudo -u "$REAL_USER" env DEVELOPER_DIR="${DEVELOPER_DIR:-}" swift build --package-path "$SCRIPT_DIR" -c release
-    else
-        env DEVELOPER_DIR="${DEVELOPER_DIR:-}" swift build --package-path "$SCRIPT_DIR" -c release
-    fi
-    BIN_DIR="$(find_bin_dir 2>/dev/null || echo "")"
+# 1. Build Swift Package
+echo -e "${YELLOW}[1/4] Building Swift release binaries...${NC}"
+if [ "$IS_ROOT" -eq 1 ]; then
+    sudo -u "$REAL_USER" env DEVELOPER_DIR="${DEVELOPER_DIR:-}" swift build --package-path "$SCRIPT_DIR" -c release || true
+else
+    env DEVELOPER_DIR="${DEVELOPER_DIR:-}" swift build --package-path "$SCRIPT_DIR" -c release || true
 fi
+BIN_DIR="$(find_bin_dir 2>/dev/null || echo "")"
 
 if [ -z "$BIN_DIR" ]; then
     echo -e "${RED}Error: Could not locate compiled release binaries.${NC}"

@@ -15,6 +15,8 @@ pub enum MenuAction {
     ToggleSchedule,
     OpenGui,
     OpenInspector,
+    OpenPulsarKey,
+    CheckForUpdates,
     Quit,
 }
 
@@ -62,6 +64,19 @@ impl DbusMenu {
                 );
                 props.insert("enabled".to_string(), Value::from(false));
                 Some(props)
+            }
+            4 => {
+                let pulsar = crate::inspector::pulsarkey::detect_pulsarkey();
+                if pulsar.installed || pulsar.config_found {
+                    props.insert(
+                        "label".to_string(),
+                        Value::from(format!("🔑 PulsarKey: {}", pulsar.summary)),
+                    );
+                    props.insert("enabled".to_string(), Value::from(true));
+                    Some(props)
+                } else {
+                    None
+                }
             }
 
             3 | 20 | 30 => {
@@ -202,6 +217,13 @@ impl DbusMenu {
                 );
                 Some(props)
             }
+            25 => {
+                props.insert(
+                    "label".to_string(),
+                    Value::from("⬆️ Check for Updates..."),
+                );
+                Some(props)
+            }
             31 => {
                 props.insert(
                     "label".to_string(),
@@ -228,7 +250,7 @@ impl DbusMenu {
         };
 
         let root_props = Self::item_props(0, active).unwrap_or_default();
-        let child_ids = [1, 2, 3, 10, 11, 12, 13, 15, 16, 17, 20, 21, 24, 22, 23, 30, 31];
+        let child_ids = [1, 2, 4, 3, 10, 11, 12, 13, 15, 16, 17, 20, 21, 24, 22, 23, 25, 30, 31];
         let mut children = Vec::with_capacity(child_ids.len());
 
         for id in child_ids {
@@ -288,6 +310,7 @@ impl DbusMenu {
     ) {
         if event_id == "clicked" {
             let action = match id {
+                4 => Some(MenuAction::OpenPulsarKey),
                 10 => Some(MenuAction::SwitchProfile(Profile::Home)),
                 11 => Some(MenuAction::SwitchProfile(Profile::Work)),
                 12 => Some(MenuAction::SwitchProfile(Profile::Dev)),
@@ -299,6 +322,7 @@ impl DbusMenu {
                 24 => Some(MenuAction::OpenInspector),
                 22 => Some(MenuAction::ResetDefaults),
                 23 => Some(MenuAction::OpenGui),
+                25 => Some(MenuAction::CheckForUpdates),
                 31 => Some(MenuAction::Quit),
                 _ => None,
             };

@@ -83,6 +83,8 @@ postureflow --evil-twin-check # Verify Wi-Fi BSSID and default gateway MAC finge
 postureflow --cloak-status    # Inspect developer credential cloaking (AWS, SSH, vaults)
 postureflow --uncloak         # Restore ~/.aws/credentials permissions (0600)
 postureflow --dns-status      # Inspect DNS-over-TLS encryption & Anti-DNS-Leak rules
+postureflow --check-update    # Check origin/GitHub for cross-machine commits or releases
+postureflow --update          # Fast-forward repository with latest remote commits
 postureflow mcp               # Launch zero-trust Model Context Protocol (MCP) server over stdio
 ```
 
@@ -126,6 +128,7 @@ postureflow-gui
 * **🎮 App-Aware Dynamic Triggers:** Detects when specific applications (IDEs, games, conferencing apps) launch, applies temporary profile overrides, and cleanly reverts on process termination.
 * **🐳 Developer Service Lifecycle:** Pauses Docker containers (`docker pause`) and stops dev background units when leaving Dev mode, automatically resuming them upon return.
 * **⚡ Hardware & Battery Optimization:** Controls CPU Energy Performance Preference (EPP), Framework Laptop battery charge limits (e.g. 80%), Bluetooth radio stealth, and BadUSB protection.
+* **🔑 PulsarKey Hardware Identity Synergy:** Automatically detects and integrates with the [PulsarKey](https://github.com/mzia/PulsarKey) FIDO2 / YubiKey suite on Pop!_OS COSMIC. Seamlessly surfaces PulsarKey's auth rigor profile (Convenience 1FA, Fortress 2FA, Lockdown), hardware Presence Sentinel status, enrolled U2F tokens, and FIDO2 SSH keys directly within the COSMIC Panel Applet, Security Cockpit, and CLI (`postureflow --pulsar`).
 * **🔒 Anti-Lockout Invariants:** Enforces strict kernel-level guarantees so that loopback IPC (`lo`), established SSH connections, and default internet egress can never be severed.
 
 ---
